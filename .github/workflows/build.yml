@@ -39,13 +39,26 @@ jobs:
                   applicationId = "com.rongin.banglakb"
                   minSdk = 24
                   targetSdk = 34
-                  versionCode = 1
-                  versionName = "1.0"
+                  versionCode = 3
+                  versionName = "1.2"
+              }
+
+              signingConfigs {
+                  create("rongin") {
+                      storeFile = file("rongin.jks")
+                      storePassword = "rongin123"
+                      keyAlias = "rongin"
+                      keyPassword = "rongin123"
+                  }
               }
 
               buildTypes {
+                  debug {
+                      signingConfig = signingConfigs.getByName("rongin")
+                  }
                   release {
                       isMinifyEnabled = false
+                      signingConfig = signingConfigs.getByName("rongin")
                   }
               }
 
@@ -58,6 +71,56 @@ jobs:
                   jvmTarget = "17"
               }
           }
+          RONGIN_EOF
+          mkdir -p app
+          base64 -d > app/rongin.jks <<'RONGIN_EOF'
+          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
+          BBQdxeEsc7yT1msHK0w+cN6qbicC8AICJxA=
           RONGIN_EOF
           mkdir -p app/src/main
           cat > app/src/main/AndroidManifest.xml <<'RONGIN_EOF'
@@ -125,21 +188,61 @@ jobs:
               private var mode = Mode.JATIYA
               private var lang = Mode.JATIYA
               private var shift = 0 // 0 off, 1 once, 2 lock
+              private var popupOn = true
+              private var hapticOn = true
+              private var rowHeightDp = 56
+              private lateinit var sounds: SoundEngine
               private val handler = Handler(Looper.getMainLooper())
-              private var root: LinearLayout? = null
+
+              private var root: LinearLayout? = null // the key rows
+              private var overlay: FrameLayout? = null // key rows + the popup bubble
+              private var bubble: TextView? = null
+              private val hideRun = Runnable { hidePreview() }
+
+              private val bubbleW = 58
+              private val bubbleH = 64
 
               // A lone vowel sign or hasanta needs a dotted circle to be visible on a key.
               private val needsBase = Regex("^[ঁ-ঃ়া-্ৗ]")
 
+              override fun onCreate() {
+                  super.onCreate()
+                  sounds = SoundEngine(this)
+              }
+
+              override fun onDestroy() {
+                  sounds.release()
+                  super.onDestroy()
+              }
+
               override fun onCreateInputView(): View {
-                  val view = LinearLayout(this).apply {
-                      orientation = LinearLayout.VERTICAL
-                      setBackgroundColor(Color.parseColor("#07080B"))
-                      setPadding(dp(4), dp(6), dp(4), dp(6))
-                  }
-                  root = view
+                  val frame = FrameLayout(this)
+                  frame.setBackgroundColor(Color.parseColor("#07080B"))
+
+                  val rows = LinearLayout(this)
+                  rows.orientation = LinearLayout.VERTICAL
+                  rows.setPadding(dp(4), dp(6), dp(4), dp(6))
+                  val rowsLp = FrameLayout.LayoutParams(
+                      ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                  )
+                  rowsLp.topMargin = dp(bubbleH + 6) // room above the top row for the popup bubble
+                  rows.layoutParams = rowsLp
+                  frame.addView(rows)
+
+                  val bub = TextView(this)
+                  bub.visibility = View.GONE
+                  bub.gravity = Gravity.CENTER
+                  bub.typeface = Typeface.DEFAULT_BOLD
+                  bub.setTextSize(TypedValue.COMPLEX_UNIT_SP, 28f)
+                  bub.elevation = dpf(8f)
+                  bub.layoutParams = FrameLayout.LayoutParams(dp(bubbleW), dp(bubbleH))
+                  frame.addView(bub)
+
+                  root = rows
+                  overlay = frame
+                  bubble = bub
                   render()
-                  return view
+                  return frame
               }
 
               override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
@@ -147,7 +250,17 @@ jobs:
                   val cls = (info?.inputType ?: 0) and InputType.TYPE_MASK_CLASS
                   mode = if (cls == InputType.TYPE_CLASS_NUMBER || cls == InputType.TYPE_CLASS_PHONE) Mode.SYM else lang
                   shift = 0
+                  popupOn = Themes.popupOn(this)
+                  hapticOn = Prefs.haptic(this)
+                  rowHeightDp = Prefs.keyHeight(this)
+                  sounds.prepare()
+                  hidePreview()
                   render()
+              }
+
+              override fun onFinishInputView(finishingInput: Boolean) {
+                  super.onFinishInputView(finishingInput)
+                  hidePreview()
               }
 
               override fun onEvaluateFullscreenMode(): Boolean = false
@@ -168,17 +281,16 @@ jobs:
                       Mode.EN -> Layouts.english
                       Mode.SYM -> Layouts.symbols
                   }
-                  val theme = Themes.current(this)
+                  val theme = Themes.active(this)
                   rows.forEachIndexed { r, row ->
-                      val rowView = LinearLayout(this).apply {
-                          orientation = LinearLayout.HORIZONTAL
-                          layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50))
-                      }
+                      val rowView = LinearLayout(this)
+                      rowView.orientation = LinearLayout.HORIZONTAL
+                      rowView.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(rowHeightDp))
                       row.forEachIndexed { i, key ->
                           if (key.kind == Kind.PAD) {
-                              rowView.addView(View(this).apply {
-                                  layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, key.w)
-                              })
+                              val spacer = View(this)
+                              spacer.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, key.w)
+                              rowView.addView(spacer)
                           } else {
                               rowView.addView(keyView(key, r, i, theme))
                           }
@@ -197,12 +309,12 @@ jobs:
                   if (key.kind == Kind.CHAR) (if (shift > 0) key.altS else key.altN) else null
 
               @SuppressLint("ClickableViewAccessibility")
-              private fun keyView(key: Key, r: Int, i: Int, theme: Int): View {
+              private fun keyView(key: Key, r: Int, i: Int, theme: Theme): View {
                   val (bg, fg) = Themes.colorFor(theme, key, r, i)
                   val frame = FrameLayout(this)
-                  frame.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, key.w).apply {
-                      setMargins(dp(2), dp(3), dp(2), dp(3))
-                  }
+                  val lp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, key.w)
+                  lp.setMargins(dp(2), dp(3), dp(2), dp(3))
+                  frame.layoutParams = lp
                   val shape = GradientDrawable()
                   shape.cornerRadius = dpf(9f)
                   shape.setColor(bg)
@@ -221,7 +333,7 @@ jobs:
                       val tv = TextView(this)
                       tv.text = show(main)
                       tv.setTextColor(fg)
-                      tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (main.codePointCount(0, main.length) > 2) 14f else 20f)
+                      tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (main.codePointCount(0, main.length) > 2) 15f else 22f)
                       tv.typeface = Typeface.DEFAULT_BOLD
                       tv.gravity = Gravity.CENTER
                       tv.layoutParams = FrameLayout.LayoutParams(
@@ -237,36 +349,78 @@ jobs:
                       h.setTextColor(fg)
                       h.alpha = 0.7f
                       h.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
-                      val lp = FrameLayout.LayoutParams(
+                      val hlp = FrameLayout.LayoutParams(
                           ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
                           Gravity.TOP or Gravity.END
                       )
-                      lp.setMargins(0, dp(3), dp(5), 0)
-                      h.layoutParams = lp
+                      hlp.setMargins(0, dp(3), dp(5), 0)
+                      h.layoutParams = hlp
                       frame.addView(h)
                   }
 
-                  attach(frame, key)
+                  attach(frame, key, bg, fg)
                   return frame
+              }
+
+              // ---------- popup bubble ----------
+
+              private fun previewPos(v: View): IntArray {
+                  val ov = overlay ?: return intArrayOf(0, 0)
+                  val a = IntArray(2)
+                  val b = IntArray(2)
+                  v.getLocationOnScreen(a)
+                  ov.getLocationOnScreen(b)
+                  val bw = dp(bubbleW)
+                  val bh = dp(bubbleH)
+                  var x = a[0] - b[0] + (v.width - bw) / 2
+                  x = x.coerceIn(0, maxOf(0, ov.width - bw))
+                  val y = a[1] - b[1] - bh - dp(2)
+                  return intArrayOf(x, y)
+              }
+
+              private fun showPreview(pos: IntArray, text: String, bg: Int, fg: Int) {
+                  val bub = bubble ?: return
+                  val shape = GradientDrawable()
+                  shape.cornerRadius = dpf(12f)
+                  shape.setColor(bg)
+                  shape.setStroke(dp(1), Color.parseColor("#55000000"))
+                  bub.background = shape
+                  bub.setTextColor(fg)
+                  bub.text = show(text)
+                  bub.x = pos[0].toFloat()
+                  bub.y = pos[1].toFloat()
+                  bub.visibility = View.VISIBLE
+              }
+
+              private fun hidePreview() {
+                  handler.removeCallbacks(hideRun)
+                  bubble?.visibility = View.GONE
               }
 
               // ---------- touch handling ----------
 
               @SuppressLint("ClickableViewAccessibility")
-              private fun attach(v: View, key: Key) {
+              private fun attach(v: View, key: Key, bg: Int, fg: Int) {
                   var longFired = false
+                  var pos = intArrayOf(0, 0)
                   val longRun = Runnable {
                       val alt = if (shift > 0) key.altS else key.altN
                       if (alt != null) {
                           longFired = true
                           commit(alt)
                           v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                          if (popupOn) {
+                              showPreview(pos, alt, bg, fg)
+                              handler.removeCallbacks(hideRun)
+                              handler.postDelayed(hideRun, 450)
+                          }
                           afterChar()
                       }
                   }
                   val repeat = object : Runnable {
                       override fun run() {
                           doDelete()
+                          sounds.play(Variant.DEL)
                           handler.postDelayed(this, 55)
                       }
                   }
@@ -274,8 +428,14 @@ jobs:
                       when (e.actionMasked) {
                           MotionEvent.ACTION_DOWN -> {
                               longFired = false
+                              handler.removeCallbacks(hideRun)
                               v.alpha = 0.78f
-                              v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                              if (hapticOn) v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                              sounds.play(variantFor(key))
+                              if (key.kind == Kind.CHAR && popupOn) {
+                                  pos = previewPos(v)
+                                  showPreview(pos, labelFor(key), bg, fg)
+                              }
                               if (key.kind == Kind.DEL) {
                                   doDelete()
                                   handler.postDelayed(repeat, 400)
@@ -287,16 +447,27 @@ jobs:
                               v.alpha = 1f
                               handler.removeCallbacks(longRun)
                               handler.removeCallbacks(repeat)
-                              if (!longFired && key.kind != Kind.DEL) onKey(key)
+                              if (!longFired) {
+                                  hidePreview()
+                                  if (key.kind != Kind.DEL) onKey(key)
+                              }
                           }
                           MotionEvent.ACTION_CANCEL -> {
                               v.alpha = 1f
                               handler.removeCallbacks(longRun)
                               handler.removeCallbacks(repeat)
+                              if (!longFired) hidePreview()
                           }
                       }
                       true
                   }
+              }
+
+              private fun variantFor(key: Key): Variant = when (key.kind) {
+                  Kind.DEL -> Variant.DEL
+                  Kind.ENTER -> Variant.ENTER
+                  Kind.CHAR -> Variant.KEY
+                  else -> Variant.SPECIAL
               }
 
               private fun onKey(key: Key) {
@@ -451,29 +622,61 @@ jobs:
           package com.rongin.banglakb
 
           import android.app.Activity
+          import android.app.AlertDialog
           import android.content.Context
           import android.content.Intent
+          import android.graphics.Color
+          import android.graphics.drawable.GradientDrawable
           import android.os.Bundle
+          import android.os.Handler
+          import android.os.Looper
           import android.provider.Settings
+          import android.view.Gravity
+          import android.view.View
+          import android.view.ViewGroup
           import android.view.inputmethod.InputMethodManager
           import android.widget.Button
           import android.widget.EditText
           import android.widget.LinearLayout
           import android.widget.ScrollView
+          import android.widget.SeekBar
+          import android.widget.Switch
           import android.widget.TextView
           import android.widget.Toast
 
-          /** Setup screen: turn the keyboard on, pick it, choose a colour theme, try it out. */
+          /** Setup screen: turn the keyboard on, pick it, manage colour themes, try it out. */
           class MainActivity : Activity() {
+
+              private lateinit var themeBox: LinearLayout
+              private lateinit var soundBox: LinearLayout
+              private val engine by lazy { SoundEngine(this) }
+              private val handler = Handler(Looper.getMainLooper())
 
               private fun dp(v: Int): Int = (v * resources.displayMetrics.density + 0.5f).toInt()
 
-              private fun title(text: String, size: Float): TextView {
+              private fun label(text: String, size: Float): TextView {
                   val tv = TextView(this)
                   tv.text = text
                   tv.textSize = size
                   tv.setPadding(0, dp(12), 0, dp(6))
                   return tv
+              }
+
+              private fun paintView(v: View, colr: Int, radius: Int) {
+                  val d = GradientDrawable()
+                  d.setColor(colr)
+                  d.cornerRadius = dp(radius).toFloat()
+                  d.setStroke(dp(1), Color.GRAY)
+                  v.background = d
+              }
+
+              private fun square(colr: Int, size: Int): View {
+                  val v = View(this)
+                  val lp = LinearLayout.LayoutParams(dp(size), dp(size))
+                  lp.setMargins(dp(2), dp(2), dp(2), dp(2))
+                  v.layoutParams = lp
+                  paintView(v, colr, 6)
+                  return v
               }
 
               override fun onCreate(savedInstanceState: Bundle?) {
@@ -482,8 +685,8 @@ jobs:
                   col.orientation = LinearLayout.VERTICAL
                   col.setPadding(dp(18), dp(24), dp(18), dp(24))
 
-                  col.addView(title("রঙিন বাংলা কিবোর্ড", 26f))
-                  col.addView(title("ধাপ ১: কিবোর্ড চালু করুন", 16f))
+                  col.addView(label("রঙিন বাংলা কিবোর্ড", 26f))
+                  col.addView(label("ধাপ ১: কিবোর্ড চালু করুন", 16f))
                   val enable = Button(this)
                   enable.text = "কিবোর্ড সেটিংস খুলুন"
                   enable.setOnClickListener {
@@ -491,7 +694,7 @@ jobs:
                   }
                   col.addView(enable)
 
-                  col.addView(title("ধাপ ২: এই কিবোর্ড বেছে নিন", 16f))
+                  col.addView(label("ধাপ ২: এই কিবোর্ড বেছে নিন", 16f))
                   val pick = Button(this)
                   pick.text = "কিবোর্ড বদলান"
                   pick.setOnClickListener {
@@ -500,20 +703,43 @@ jobs:
                   }
                   col.addView(pick)
 
-                  col.addView(title("কী-র রঙ", 16f))
-                  Themes.all.forEachIndexed { index, theme ->
-                      val b = Button(this)
-                      b.text = theme.name
-                      b.setBackgroundColor(Themes.swatch(theme.cycle[0]))
-                      b.setTextColor(Themes.labelColor(theme.cycle[0]))
-                      b.setOnClickListener {
-                          Themes.save(this, index)
-                          Toast.makeText(this, theme.name + " রঙ বেছে নেওয়া হয়েছে", Toast.LENGTH_SHORT).show()
-                      }
-                      col.addView(b)
-                  }
+                  col.addView(label("কী চাপলে পপআপ", 16f))
+                  val sw = Switch(this)
+                  sw.text = "কী চাপলে ওপরে বড় অক্ষর দেখান"
+                  sw.isChecked = Themes.popupOn(this)
+                  sw.setOnCheckedChangeListener { _, on -> Themes.setPopup(this, on) }
+                  col.addView(sw)
 
-                  col.addView(title("এখানে টাইপ করে দেখুন", 16f))
+                  col.addView(label("কী-র সাইজ", 16f))
+                  col.addView(sliderRow("কী-র উচ্চতা", 44, 80, Prefs.keyHeight(this)) { Prefs.setKeyHeight(this, it) })
+
+                  col.addView(label("কী-র সাউন্ড", 16f))
+                  soundBox = LinearLayout(this)
+                  soundBox.orientation = LinearLayout.VERTICAL
+                  col.addView(soundBox)
+                  refreshSounds()
+                  col.addView(sliderRow("ভলিউম", 0, 100, Prefs.volume(this)) {
+                      Prefs.setVolume(this, it)
+                      previewKey()
+                  })
+                  val hs = Switch(this)
+                  hs.text = "কী চাপলে ভাইব্রেশন"
+                  hs.isChecked = Prefs.haptic(this)
+                  hs.setOnCheckedChangeListener { _, on -> Prefs.setHaptic(this, on) }
+                  col.addView(hs)
+
+                  col.addView(label("কী-র রঙের থিম", 16f))
+                  themeBox = LinearLayout(this)
+                  themeBox.orientation = LinearLayout.VERTICAL
+                  col.addView(themeBox)
+                  refreshThemes()
+
+                  val add = Button(this)
+                  add.text = "+ নতুন থিম বানান"
+                  add.setOnClickListener { openEditor() }
+                  col.addView(add)
+
+                  col.addView(label("এখানে টাইপ করে দেখুন", 16f))
                   val test = EditText(this)
                   test.hint = "এখানে চাপুন"
                   col.addView(test)
@@ -521,6 +747,560 @@ jobs:
                   val scroll = ScrollView(this)
                   scroll.addView(col)
                   setContentView(scroll)
+              }
+
+              override fun onDestroy() {
+                  engine.release()
+                  super.onDestroy()
+              }
+
+              // ---------- sliders and sounds ----------
+
+              /** A labelled slider from [min] to [max]. [onDone] is called when the finger lifts. */
+              private fun sliderRow(title: String, min: Int, max: Int, start: Int, onDone: (Int) -> Unit): View {
+                  val wrap = LinearLayout(this)
+                  wrap.orientation = LinearLayout.VERTICAL
+                  val t = TextView(this)
+                  t.text = title + ": " + start
+                  val s = SeekBar(this)
+                  s.max = max - min
+                  s.progress = start.coerceIn(min, max) - min
+                  s.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                      override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
+                          t.text = title + ": " + (min + progress)
+                      }
+
+                      override fun onStartTrackingTouch(sb: SeekBar?) {}
+
+                      override fun onStopTrackingTouch(sb: SeekBar?) {
+                          onDone(min + s.progress)
+                      }
+                  })
+                  wrap.addView(t)
+                  wrap.addView(s)
+                  return wrap
+              }
+
+              private fun refreshSounds() {
+                  soundBox.removeAllViews()
+                  val cur = Prefs.soundStyle(this)
+                  Synth.styles.forEach { st ->
+                      val b = Button(this)
+                      b.text = (if (st.id == cur) "✓ " else "") + st.name
+                      b.setOnClickListener {
+                          Prefs.setSoundStyle(this, st.id)
+                          refreshSounds()
+                          previewSet()
+                      }
+                      soundBox.addView(b)
+                  }
+              }
+
+              private fun previewKey() {
+                  engine.prepare()
+                  handler.postDelayed({ engine.play(Variant.KEY) }, 250)
+              }
+
+              /** Plays a few sample key presses: letter, letter, space, enter. */
+              private fun previewSet() {
+                  engine.prepare()
+                  handler.postDelayed({ engine.play(Variant.KEY) }, 300)
+                  handler.postDelayed({ engine.play(Variant.KEY) }, 480)
+                  handler.postDelayed({ engine.play(Variant.SPECIAL) }, 680)
+                  handler.postDelayed({ engine.play(Variant.ENTER) }, 900)
+              }
+
+              // ---------- theme list ----------
+
+              private fun refreshThemes() {
+                  themeBox.removeAllViews()
+                  val themes = Themes.all(this)
+                  val cur = Themes.current(this)
+                  themes.forEachIndexed { index, t ->
+                      val row = LinearLayout(this)
+                      row.orientation = LinearLayout.HORIZONTAL
+                      row.gravity = Gravity.CENTER_VERTICAL
+                      row.setPadding(0, dp(2), 0, dp(2))
+
+                      val choose = Button(this)
+                      choose.text = (if (index == cur) "✓ " else "") + t.name
+                      choose.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                      choose.setOnClickListener {
+                          Themes.save(this, index)
+                          refreshThemes()
+                      }
+                      row.addView(choose)
+
+                      val strip = LinearLayout(this)
+                      strip.orientation = LinearLayout.HORIZONTAL
+                      strip.setPadding(dp(6), 0, dp(6), 0)
+                      (t.cycle.take(4) + listOf(t.fn, t.enter)).forEach { colr -> strip.addView(square(colr, 14)) }
+                      row.addView(strip)
+
+                      if (!t.builtin) {
+                          val del = Button(this)
+                          del.text = "✕"
+                          del.setOnClickListener { confirmDelete(index, t.name) }
+                          row.addView(del)
+                      }
+                      themeBox.addView(row)
+                  }
+              }
+
+              private fun confirmDelete(index: Int, name: String) {
+                  AlertDialog.Builder(this)
+                      .setMessage("\"" + name + "\" থিম মুছে ফেলবেন?")
+                      .setPositiveButton("মুছুন") { _, _ ->
+                          Themes.removeCustom(this, index)
+                          refreshThemes()
+                      }
+                      .setNegativeButton("থাক", null)
+                      .show()
+              }
+
+              // ---------- theme editor ----------
+
+              private fun openEditor() {
+                  val cycle = mutableListOf(Color.parseColor("#F6C628"), Color.parseColor("#2563D9"), Color.parseColor("#F3F2EE"))
+                  var fn = Color.parseColor("#1D1F27")
+                  var enter = Color.parseColor("#E5392F")
+
+                  val body = LinearLayout(this)
+                  body.orientation = LinearLayout.VERTICAL
+                  body.setPadding(dp(18), dp(8), dp(18), dp(8))
+
+                  val name = EditText(this)
+                  name.hint = "থিমের নাম"
+                  name.setSingleLine()
+                  body.addView(name)
+
+                  body.addView(label("কী-র রঙ (সর্বোচ্চ ৬টি, ক্রমানুসারে বসবে)। রঙে চাপলে বদলাবে।", 14f))
+                  val cycleRow = LinearLayout(this)
+                  cycleRow.orientation = LinearLayout.HORIZONTAL
+                  body.addView(cycleRow)
+
+                  val ctrl = LinearLayout(this)
+                  ctrl.orientation = LinearLayout.HORIZONTAL
+                  val addB = Button(this)
+                  addB.text = "+ রঙ"
+                  val remB = Button(this)
+                  remB.text = "− রঙ"
+                  ctrl.addView(addB)
+                  ctrl.addView(remB)
+                  body.addView(ctrl)
+
+                  fun redraw() {
+                      cycleRow.removeAllViews()
+                      cycle.forEachIndexed { i, colr ->
+                          val sq = square(colr, 40)
+                          sq.setOnClickListener {
+                              pickColor(cycle[i]) { picked ->
+                                  cycle[i] = picked
+                                  redraw()
+                              }
+                          }
+                          cycleRow.addView(sq)
+                      }
+                      addB.isEnabled = cycle.size < 6
+                      remB.isEnabled = cycle.size > 1
+                  }
+                  addB.setOnClickListener {
+                      cycle.add(cycle.last())
+                      redraw()
+                  }
+                  remB.setOnClickListener {
+                      cycle.removeAt(cycle.size - 1)
+                      redraw()
+                  }
+                  redraw()
+
+                  body.addView(label("Shift, মোছা, স্পেস কী-র রঙ", 14f))
+                  val fnSq = square(fn, 40)
+                  fnSq.setOnClickListener {
+                      pickColor(fn) { picked ->
+                          fn = picked
+                          paintView(fnSq, picked, 6)
+                      }
+                  }
+                  body.addView(fnSq)
+
+                  body.addView(label("এন্টার কী-র রঙ", 14f))
+                  val enterSq = square(enter, 40)
+                  enterSq.setOnClickListener {
+                      pickColor(enter) { picked ->
+                          enter = picked
+                          paintView(enterSq, picked, 6)
+                      }
+                  }
+                  body.addView(enterSq)
+
+                  val scroll = ScrollView(this)
+                  scroll.addView(body)
+                  AlertDialog.Builder(this)
+                      .setTitle("নতুন থিম")
+                      .setView(scroll)
+                      .setPositiveButton("সেভ করুন") { _, _ ->
+                          val typed = name.text.toString().trim()
+                          val n = if (typed.isEmpty()) "আমার থিম " + (Themes.custom(this).size + 1) else typed
+                          Themes.addCustom(this, Theme(n, cycle.toList(), fn, enter, false))
+                          refreshThemes()
+                          Toast.makeText(this, n + " থিম সেভ হয়েছে", Toast.LENGTH_SHORT).show()
+                      }
+                      .setNegativeButton("থাক", null)
+                      .show()
+              }
+
+              /** Simple colour picker: three sliders (hue, saturation, brightness) and a live preview. */
+              private fun pickColor(initial: Int, onPick: (Int) -> Unit) {
+                  val hsv = FloatArray(3)
+                  Color.colorToHSV(initial, hsv)
+
+                  val box = LinearLayout(this)
+                  box.orientation = LinearLayout.VERTICAL
+                  box.setPadding(dp(20), dp(12), dp(20), dp(4))
+
+                  val preview = View(this)
+                  preview.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48))
+                  val hex = TextView(this)
+                  hex.setPadding(0, dp(6), 0, dp(6))
+
+                  fun refresh() {
+                      val colr = Color.HSVToColor(hsv)
+                      paintView(preview, colr, 8)
+                      hex.text = String.format("#%06X", 0xFFFFFF and colr)
+                  }
+
+                  fun bar(title: String, max: Int, start: Int, set: (Int) -> Unit): View {
+                      val wrap = LinearLayout(this)
+                      wrap.orientation = LinearLayout.VERTICAL
+                      val t = TextView(this)
+                      t.text = title
+                      val s = SeekBar(this)
+                      s.max = max
+                      s.progress = start
+                      s.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                          override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
+                              set(progress)
+                              refresh()
+                          }
+
+                          override fun onStartTrackingTouch(sb: SeekBar?) {}
+
+                          override fun onStopTrackingTouch(sb: SeekBar?) {}
+                      })
+                      wrap.addView(t)
+                      wrap.addView(s)
+                      return wrap
+                  }
+
+                  box.addView(preview)
+                  box.addView(hex)
+                  box.addView(bar("রঙ", 360, hsv[0].toInt()) { hsv[0] = it.toFloat() })
+                  box.addView(bar("গাঢ়তা", 100, (hsv[1] * 100).toInt()) { hsv[1] = it / 100f })
+                  box.addView(bar("আলো", 100, (hsv[2] * 100).toInt()) { hsv[2] = it / 100f })
+                  refresh()
+
+                  AlertDialog.Builder(this)
+                      .setTitle("রঙ বেছে নিন")
+                      .setView(box)
+                      .setPositiveButton("ঠিক আছে") { _, _ -> onPick(Color.HSVToColor(hsv)) }
+                      .setNegativeButton("থাক", null)
+                      .show()
+              }
+          }
+          RONGIN_EOF
+          mkdir -p app/src/main/java/com/rongin/banglakb
+          cat > app/src/main/java/com/rongin/banglakb/Sounds.kt <<'RONGIN_EOF'
+          package com.rongin.banglakb
+
+          import android.content.Context
+          import android.media.AudioAttributes
+          import android.media.SoundPool
+          import java.io.File
+
+          /** Small settings stored on the phone. */
+          object Prefs {
+              private const val PREFS = "kb"
+
+              private fun p(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+              fun soundStyle(ctx: Context): String = p(ctx).getString("sound", "ios") ?: "ios"
+
+              fun setSoundStyle(ctx: Context, id: String) {
+                  p(ctx).edit().putString("sound", id).apply()
+              }
+
+              fun volume(ctx: Context): Int = p(ctx).getInt("volume", 60).coerceIn(0, 100)
+
+              fun setVolume(ctx: Context, v: Int) {
+                  p(ctx).edit().putInt("volume", v.coerceIn(0, 100)).apply()
+              }
+
+              /** Height of one key row in dp. The old fixed value was 50. */
+              fun keyHeight(ctx: Context): Int = p(ctx).getInt("keyh", 56).coerceIn(44, 80)
+
+              fun setKeyHeight(ctx: Context, dp: Int) {
+                  p(ctx).edit().putInt("keyh", dp.coerceIn(44, 80)).apply()
+              }
+
+              fun haptic(ctx: Context): Boolean = p(ctx).getBoolean("haptic", true)
+
+              fun setHaptic(ctx: Context, on: Boolean) {
+                  p(ctx).edit().putBoolean("haptic", on).apply()
+              }
+          }
+
+          /** Plays the key sound of the chosen style with very low delay. */
+          class SoundEngine(private val ctx: Context) {
+              private var pool: SoundPool? = null
+              private val ids = HashMap<Variant, Int>()
+              private val ready = java.util.Collections.synchronizedSet(HashSet<Int>())
+              private var loadedStyle: String? = null
+              private val rnd = java.util.Random()
+
+              private fun wavFile(style: String, v: Variant): File {
+                  val dir = File(ctx.filesDir, "snd1")
+                  dir.mkdirs()
+                  val f = File(dir, style + "_" + v.name.lowercase() + ".wav")
+                  if (!f.exists() || f.length() == 0L) {
+                      f.writeBytes(Synth.wav(Synth.render(style, v)))
+                  }
+                  return f
+              }
+
+              /** Loads the sounds of the style chosen in settings. Cheap if nothing changed. */
+              fun prepare() {
+                  val style = Prefs.soundStyle(ctx)
+                  if (style == loadedStyle) return
+                  release()
+                  loadedStyle = style
+                  if (style == "off") return
+                  try {
+                      val attrs = AudioAttributes.Builder()
+                          .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                          .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                          .build()
+                      val p = SoundPool.Builder().setMaxStreams(6).setAudioAttributes(attrs).build()
+                      p.setOnLoadCompleteListener { _, sampleId, status ->
+                          if (status == 0) ready.add(sampleId)
+                      }
+                      Variant.values().forEach { v ->
+                          ids[v] = p.load(wavFile(style, v).absolutePath, 1)
+                      }
+                      pool = p
+                  } catch (e: Exception) {
+                      pool = null
+                  }
+              }
+
+              fun play(v: Variant) {
+                  val p = pool ?: return
+                  val id = ids[v] ?: return
+                  if (!ready.contains(id)) return
+                  val vol = Prefs.volume(ctx) / 100f
+                  // A tiny random pitch change keeps repeated keys from sounding robotic.
+                  p.play(id, vol, vol, 1, 0, 0.97f + rnd.nextFloat() * 0.06f)
+              }
+
+              fun release() {
+                  pool?.release()
+                  pool = null
+                  ids.clear()
+                  ready.clear()
+                  loadedStyle = null
+              }
+          }
+          RONGIN_EOF
+          mkdir -p app/src/main/java/com/rongin/banglakb
+          cat > app/src/main/java/com/rongin/banglakb/Synth.kt <<'RONGIN_EOF'
+          package com.rongin.banglakb
+
+          import kotlin.math.abs
+          import kotlin.math.cos
+          import kotlin.math.exp
+          import kotlin.math.max
+          import kotlin.math.sin
+          import kotlin.math.sqrt
+
+          enum class Variant { KEY, DEL, SPECIAL, ENTER }
+
+          class StyleInfo(val id: String, val name: String)
+
+          /**
+           * Builds the short key sounds from maths, so no sound files have to ship with the app.
+           * Each style has four variants: normal key, delete, space/shift/other, and enter.
+           * No Android classes here, so it can also be run on a plain JVM.
+           */
+          object Synth {
+              const val SR = 22050
+
+              val styles = listOf(
+                  StyleInfo("off", "নীরব"),
+                  StyleInfo("ios", "আইফোন ধাঁচ"),
+                  StyleInfo("blue", "মেকানিক্যাল নীল (ক্লিকি)"),
+                  StyleInfo("brown", "মেকানিক্যাল বাদামি (নরম ক্লিক)"),
+                  StyleInfo("red", "মেকানিক্যাল লাল (গভীর থক)"),
+                  StyleInfo("typewriter", "টাইপরাইটার (এন্টারে ঘণ্টা)"),
+                  StyleInfo("pop", "বাবল পপ"),
+                  StyleInfo("tap", "হালকা ট্যাপ"),
+              )
+
+              private class Mix(seconds: Double) {
+                  val n = (seconds * SR).toInt()
+                  val buf = FloatArray(n)
+                  private val rnd = java.util.Random(7)
+
+                  /** A burst of noise around [freq] that dies away with time constant [tau]. */
+                  fun band(freq: Double, q: Double, tau: Double, amp: Double, delay: Double = 0.0) {
+                      val w0 = 2.0 * Math.PI * freq / SR
+                      val alpha = sin(w0) / (2.0 * q)
+                      val a0 = 1.0 + alpha
+                      val b0 = alpha / a0
+                      val b2 = -alpha / a0
+                      val a1 = -2.0 * cos(w0) / a0
+                      val a2 = (1.0 - alpha) / a0
+                      // A narrow band passes little noise, so scale each layer to a similar loudness.
+                      val gain = amp * sqrt((SR / 2.0) / (freq / q)) * 1.2
+                      var x1 = 0.0
+                      var x2 = 0.0
+                      var y1 = 0.0
+                      var y2 = 0.0
+                      val start = (delay * SR).toInt()
+                      for (i in 0 until n - start) {
+                          val t = i.toDouble() / SR
+                          val x = (rnd.nextDouble() * 2.0 - 1.0) * exp(-t / tau)
+                          val y = b0 * x + b2 * x2 - a1 * y1 - a2 * y2
+                          x2 = x1
+                          x1 = x
+                          y2 = y1
+                          y1 = y
+                          buf[start + i] += (y * gain).toFloat()
+                      }
+                  }
+
+                  /** A fading sine. The pitch glides from [f0] to [f1] over the first moments. */
+                  fun tone(f0: Double, f1: Double, tau: Double, amp: Double, delay: Double = 0.0) {
+                      val start = (delay * SR).toInt()
+                      var phase = 0.0
+                      for (i in 0 until n - start) {
+                          val t = i.toDouble() / SR
+                          val glide = if (t >= tau * 1.5) 1.0 else t / (tau * 1.5)
+                          val f = f0 + (f1 - f0) * glide
+                          phase += 2.0 * Math.PI * f / SR
+                          buf[start + i] += (sin(phase) * exp(-t / tau) * amp).toFloat()
+                      }
+                  }
+
+                  fun pcm(): ShortArray {
+                      // Short fades first, so the loudness is measured on what is actually played.
+                      val fadeIn = max(1, (0.0003 * SR).toInt())
+                      val fadeOut = max(1, (0.004 * SR).toInt())
+                      for (i in 0 until n) {
+                          var v = buf[i]
+                          if (i < fadeIn) v *= i / fadeIn.toFloat()
+                          if (i > n - fadeOut) v *= (n - i) / fadeOut.toFloat()
+                          buf[i] = v
+                      }
+                      var peak = 0f
+                      var sum = 0.0
+                      for (v in buf) {
+                          peak = max(peak, abs(v))
+                          sum += (v * v).toDouble()
+                      }
+                      val rms = sqrt(sum / n).toFloat()
+                      // Even loudness across styles, without clipping the sharp clicks.
+                      var g = if (peak > 0f) 0.9f / peak else 1f
+                      if (rms > 0f) g = minOf(g, 0.12f / rms)
+                      return ShortArray(n) { i ->
+                          (buf[i] * g * 32767f).toInt().coerceIn(-32768, 32767).toShort()
+                      }
+                  }
+              }
+
+              fun render(style: String, variant: Variant): ShortArray {
+                  val bell = style == "typewriter" && variant == Variant.ENTER
+                  val m = Mix(if (bell) 0.5 else 0.09)
+                  // Lower pitch for delete and for the bigger keys.
+                  val d = when (variant) {
+                      Variant.DEL -> 0.82
+                      Variant.SPECIAL -> 0.7
+                      Variant.ENTER -> 0.62
+                      Variant.KEY -> 1.0
+                  }
+                  when (style) {
+                      "ios" -> {
+                          m.band(2600.0 * d, 1.2, 0.004, 1.0)
+                          m.tone(1500.0 * d, 1500.0 * d, 0.008, 0.6)
+                      }
+                      "blue" -> {
+                          m.band(5200.0 * d, 2.0, 0.0015, 1.0)
+                          m.band(900.0 * d, 1.5, 0.012, 1.1, 0.009)
+                          m.tone(320.0 * d, 320.0 * d, 0.02, 0.6, 0.009)
+                      }
+                      "brown" -> {
+                          m.band(3200.0 * d, 1.5, 0.002, 0.45)
+                          m.band(700.0 * d, 1.2, 0.014, 1.1, 0.008)
+                          m.tone(280.0 * d, 280.0 * d, 0.02, 0.6, 0.008)
+                      }
+                      "red" -> {
+                          m.band(600.0 * d, 1.0, 0.016, 1.2)
+                          m.tone(230.0 * d, 230.0 * d, 0.025, 0.8)
+                          m.tone(480.0 * d, 480.0 * d, 0.012, 0.35)
+                      }
+                      "typewriter" -> {
+                          if (bell) {
+                              m.tone(2600.0, 2600.0, 0.25, 0.9)
+                              m.tone(5200.0, 5200.0, 0.15, 0.35)
+                              m.band(3800.0, 1.2, 0.003, 0.5)
+                          } else {
+                              m.band(3800.0 * d, 1.2, 0.003, 1.0)
+                              m.tone(2600.0 * d, 2600.0 * d, 0.03, 0.4)
+                              m.band(400.0 * d, 1.0, 0.02, 0.9, 0.004)
+                          }
+                      }
+                      "pop" -> when (variant) {
+                          Variant.KEY -> m.tone(550.0, 1300.0, 0.018, 1.0)
+                          Variant.DEL -> m.tone(1000.0, 450.0, 0.02, 1.0)
+                          Variant.SPECIAL -> m.tone(380.0, 850.0, 0.03, 1.0)
+                          Variant.ENTER -> m.tone(500.0, 1700.0, 0.04, 1.0)
+                      }
+                      "tap" -> {
+                          m.band(4200.0 * d, 1.0, 0.0025, 1.0)
+                          m.tone(2300.0 * d, 2300.0 * d, 0.004, 0.5)
+                      }
+                  }
+                  return m.pcm()
+              }
+
+              /** Wraps 16-bit mono samples in a standard WAV file. */
+              fun wav(pcm: ShortArray): ByteArray {
+                  val dataLen = pcm.size * 2
+                  val out = java.io.ByteArrayOutputStream(44 + dataLen)
+                  fun int(v: Int) {
+                      out.write(v and 0xFF)
+                      out.write((v shr 8) and 0xFF)
+                      out.write((v shr 16) and 0xFF)
+                      out.write((v shr 24) and 0xFF)
+                  }
+                  fun short(v: Int) {
+                      out.write(v and 0xFF)
+                      out.write((v shr 8) and 0xFF)
+                  }
+                  out.write("RIFF".toByteArray())
+                  int(36 + dataLen)
+                  out.write("WAVE".toByteArray())
+                  out.write("fmt ".toByteArray())
+                  int(16)
+                  short(1) // PCM
+                  short(1) // mono
+                  int(SR)
+                  int(SR * 2)
+                  short(2)
+                  short(16)
+                  out.write("data".toByteArray())
+                  int(dataLen)
+                  for (s in pcm) short(s.toInt())
+                  return out.toByteArray()
               }
           }
           RONGIN_EOF
@@ -530,53 +1310,124 @@ jobs:
 
           import android.content.Context
           import android.graphics.Color
+          import org.json.JSONArray
+          import org.json.JSONObject
 
-          /** Key colour themes. Colours are (key background, label colour). */
+          /** A key colour theme. Colours are ARGB ints. Key colours repeat in order across the keyboard. */
+          class Theme(
+              val name: String,
+              val cycle: List<Int>,
+              val fn: Int,
+              val enter: Int,
+              val builtin: Boolean,
+          )
+
           object Themes {
-              class Theme(val name: String, val cycle: IntArray, val fn: Int, val enter: Int)
-
-              private val pal = listOf(
-                  "#F6C628" to "#1B1505", // 0 হলুদ
-                  "#2563D9" to "#FFFFFF", // 1 নীল
-                  "#F3F2EE" to "#16171B", // 2 সাদা
-                  "#E5392F" to "#FFFFFF", // 3 লাল
-                  "#1D1F27" to "#F2F2F2", // 4 কালো
-                  "#27B37A" to "#04140D", // 5 সবুজ
-                  "#EE5C9B" to "#2B0715", // 6 গোলাপি
-                  "#7B57E0" to "#FFFFFF", // 7 বেগুনি
-                  "#F58A1F" to "#1B0E02", // 8 কমলা
-              )
-
-              val all = listOf(
-                  Theme("রংধনু", intArrayOf(0, 1, 2, 3), 4, 3),
-                  Theme("সমুদ্র", intArrayOf(1, 2), 4, 0),
-                  Theme("ক্যান্ডি", intArrayOf(6, 2, 7), 4, 0),
-                  Theme("বন", intArrayOf(5, 2, 4), 0, 8),
-                  Theme("সূর্যাস্ত", intArrayOf(8, 0, 3), 4, 7),
-                  Theme("রাত", intArrayOf(4), 7, 0),
-              )
-
               private const val PREFS = "kb"
 
-              fun current(ctx: Context): Int =
-                  ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt("theme", 0).coerceIn(0, all.size - 1)
+              private fun c(hex: String): Int = Color.parseColor(hex)
 
-              fun save(ctx: Context, index: Int) {
-                  ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putInt("theme", index).apply()
+              val builtin: List<Theme> by lazy {
+                  val y = c("#F6C628")
+                  val b = c("#2563D9")
+                  val w = c("#F3F2EE")
+                  val r = c("#E5392F")
+                  val k = c("#1D1F27")
+                  val g = c("#27B37A")
+                  val p = c("#EE5C9B")
+                  val v = c("#7B57E0")
+                  val o = c("#F58A1F")
+                  listOf(
+                      Theme("রংধনু", listOf(y, b, w, r), k, r, true),
+                      Theme("সমুদ্র", listOf(b, w), k, y, true),
+                      Theme("ক্যান্ডি", listOf(p, w, v), k, y, true),
+                      Theme("বন", listOf(g, w, k), y, o, true),
+                      Theme("সূর্যাস্ত", listOf(o, y, r), k, v, true),
+                      Theme("রাত", listOf(k), v, y, true),
+                  )
               }
 
-              fun swatch(index: Int): Int = Color.parseColor(pal[index].first)
+              private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-              fun labelColor(index: Int): Int = Color.parseColor(pal[index].second)
-
-              fun colorFor(theme: Int, key: Key, row: Int, col: Int): Pair<Int, Int> {
-                  val t = all[theme]
-                  val idx = when {
-                      key.kind == Kind.ENTER -> t.enter
-                      key.fn -> t.fn
-                      else -> t.cycle[(row * 2 + col) % t.cycle.size]
+              /** Themes the user made. Unlimited; stored as JSON on the phone. */
+              fun custom(ctx: Context): List<Theme> {
+                  return try {
+                      val arr = JSONArray(prefs(ctx).getString("custom", "[]") ?: "[]")
+                      (0 until arr.length()).map { i ->
+                          val o = arr.getJSONObject(i)
+                          val cs = o.getJSONArray("c")
+                          val colors = (0 until cs.length()).map { j -> cs.getInt(j) }
+                          Theme(o.getString("n"), colors, o.getInt("f"), o.getInt("e"), false)
+                      }.filter { it.cycle.isNotEmpty() }
+                  } catch (e: Exception) {
+                      emptyList()
                   }
-                  return Color.parseColor(pal[idx].first) to Color.parseColor(pal[idx].second)
+              }
+
+              fun all(ctx: Context): List<Theme> = builtin + custom(ctx)
+
+              private fun saveCustom(ctx: Context, list: List<Theme>) {
+                  val arr = JSONArray()
+                  list.forEach { t ->
+                      val o = JSONObject()
+                      o.put("n", t.name)
+                      val cs = JSONArray()
+                      t.cycle.forEach { col -> cs.put(col) }
+                      o.put("c", cs)
+                      o.put("f", t.fn)
+                      o.put("e", t.enter)
+                      arr.put(o)
+                  }
+                  prefs(ctx).edit().putString("custom", arr.toString()).apply()
+              }
+
+              fun addCustom(ctx: Context, t: Theme) {
+                  saveCustom(ctx, custom(ctx) + t)
+                  save(ctx, all(ctx).size - 1)
+              }
+
+              /** [allIndex] is the position in [all]. Built-in themes cannot be removed. */
+              fun removeCustom(ctx: Context, allIndex: Int) {
+                  val ci = allIndex - builtin.size
+                  val list = custom(ctx).toMutableList()
+                  if (ci in list.indices) {
+                      list.removeAt(ci)
+                      saveCustom(ctx, list)
+                  }
+                  val cur = current(ctx)
+                  val next = if (cur == allIndex) 0 else if (cur > allIndex) cur - 1 else cur
+                  save(ctx, next)
+              }
+
+              fun current(ctx: Context): Int =
+                  prefs(ctx).getInt("theme", 0).coerceIn(0, all(ctx).size - 1)
+
+              fun active(ctx: Context): Theme = all(ctx)[current(ctx)]
+
+              fun save(ctx: Context, index: Int) {
+                  prefs(ctx).edit().putInt("theme", index).apply()
+              }
+
+              fun popupOn(ctx: Context): Boolean = prefs(ctx).getBoolean("popup", true)
+
+              fun setPopup(ctx: Context, on: Boolean) {
+                  prefs(ctx).edit().putBoolean("popup", on).apply()
+              }
+
+              /** Dark label on light keys, white label on dark keys. */
+              fun labelOn(bg: Int): Int {
+                  val lum = (0.299 * Color.red(bg) + 0.587 * Color.green(bg) + 0.114 * Color.blue(bg)) / 255.0
+                  return if (lum > 0.5) Color.parseColor("#16171B") else Color.WHITE
+              }
+
+              /** Returns (key background, label colour). */
+              fun colorFor(theme: Theme, key: Key, row: Int, col: Int): Pair<Int, Int> {
+                  val bg = when {
+                      key.kind == Kind.ENTER -> theme.enter
+                      key.fn -> theme.fn
+                      else -> theme.cycle[(row * 2 + col) % theme.cycle.size]
+                  }
+                  return bg to labelOn(bg)
               }
           }
           RONGIN_EOF
