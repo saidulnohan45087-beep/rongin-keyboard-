@@ -1,0 +1,664 @@
+name: Build APK
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Write project files
+        run: |
+          mkdir -p app
+          cat > app/build.gradle.kts <<'RONGIN_EOF'
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+          }
+
+          android {
+              namespace = "com.rongin.banglakb"
+              compileSdk = 34
+
+              defaultConfig {
+                  applicationId = "com.rongin.banglakb"
+                  minSdk = 24
+                  targetSdk = 34
+                  versionCode = 1
+                  versionName = "1.0"
+              }
+
+              buildTypes {
+                  release {
+                      isMinifyEnabled = false
+                  }
+              }
+
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+          }
+          RONGIN_EOF
+          mkdir -p app/src/main
+          cat > app/src/main/AndroidManifest.xml <<'RONGIN_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <application
+                  android:allowBackup="true"
+                  android:icon="@drawable/ic_launcher"
+                  android:label="@string/app_name">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+
+                  <service
+                      android:name=".BanglaKeyboardService"
+                      android:exported="true"
+                      android:label="@string/ime_name"
+                      android:permission="android.permission.BIND_INPUT_METHOD">
+                      <intent-filter>
+                          <action android:name="android.view.InputMethod" />
+                      </intent-filter>
+                      <meta-data
+                          android:name="android.view.im"
+                          android:resource="@xml/method" />
+                  </service>
+              </application>
+          </manifest>
+          RONGIN_EOF
+          mkdir -p app/src/main/java/com/rongin/banglakb
+          cat > app/src/main/java/com/rongin/banglakb/BanglaKeyboardService.kt <<'RONGIN_EOF'
+          package com.rongin.banglakb
+
+          import android.annotation.SuppressLint
+          import android.graphics.Color
+          import android.graphics.Typeface
+          import android.graphics.drawable.GradientDrawable
+          import android.inputmethodservice.InputMethodService
+          import android.os.Handler
+          import android.os.Looper
+          import android.text.InputType
+          import android.util.TypedValue
+          import android.view.Gravity
+          import android.view.HapticFeedbackConstants
+          import android.view.KeyEvent
+          import android.view.MotionEvent
+          import android.view.View
+          import android.view.ViewGroup
+          import android.view.inputmethod.EditorInfo
+          import android.widget.FrameLayout
+          import android.widget.ImageView
+          import android.widget.LinearLayout
+          import android.widget.TextView
+
+          class BanglaKeyboardService : InputMethodService() {
+
+              private enum class Mode { JATIYA, EN, SYM }
+
+              private var mode = Mode.JATIYA
+              private var lang = Mode.JATIYA
+              private var shift = 0 // 0 off, 1 once, 2 lock
+              private val handler = Handler(Looper.getMainLooper())
+              private var root: LinearLayout? = null
+
+              // A lone vowel sign or hasanta needs a dotted circle to be visible on a key.
+              private val needsBase = Regex("^[ঁ-ঃ়া-্ৗ]")
+
+              override fun onCreateInputView(): View {
+                  val view = LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      setBackgroundColor(Color.parseColor("#07080B"))
+                      setPadding(dp(4), dp(6), dp(4), dp(6))
+                  }
+                  root = view
+                  render()
+                  return view
+              }
+
+              override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
+                  super.onStartInputView(info, restarting)
+                  val cls = (info?.inputType ?: 0) and InputType.TYPE_MASK_CLASS
+                  mode = if (cls == InputType.TYPE_CLASS_NUMBER || cls == InputType.TYPE_CLASS_PHONE) Mode.SYM else lang
+                  shift = 0
+                  render()
+              }
+
+              override fun onEvaluateFullscreenMode(): Boolean = false
+
+              // ---------- drawing ----------
+
+              private fun dp(v: Int): Int = (v * resources.displayMetrics.density + 0.5f).toInt()
+
+              private fun dpf(v: Float): Float = v * resources.displayMetrics.density
+
+              private fun show(s: String): String = if (needsBase.containsMatchIn(s)) "◌" + s else s
+
+              private fun render() {
+                  val container = root ?: return
+                  container.removeAllViews()
+                  val rows = when (mode) {
+                      Mode.JATIYA -> Layouts.jatiya
+                      Mode.EN -> Layouts.english
+                      Mode.SYM -> Layouts.symbols
+                  }
+                  val theme = Themes.current(this)
+                  rows.forEachIndexed { r, row ->
+                      val rowView = LinearLayout(this).apply {
+                          orientation = LinearLayout.HORIZONTAL
+                          layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50))
+                      }
+                      row.forEachIndexed { i, key ->
+                          if (key.kind == Kind.PAD) {
+                              rowView.addView(View(this).apply {
+                                  layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, key.w)
+                              })
+                          } else {
+                              rowView.addView(keyView(key, r, i, theme))
+                          }
+                      }
+                      container.addView(rowView)
+                  }
+              }
+
+              private fun labelFor(key: Key): String = when (key.kind) {
+                  Kind.SHIFT -> if (shift == 2) "⇪" else "⇧"
+                  Kind.CHAR -> if (shift > 0) key.s else key.n
+                  else -> key.n
+              }
+
+              private fun hintFor(key: Key): String? =
+                  if (key.kind == Kind.CHAR) (if (shift > 0) key.altS else key.altN) else null
+
+              @SuppressLint("ClickableViewAccessibility")
+              private fun keyView(key: Key, r: Int, i: Int, theme: Int): View {
+                  val (bg, fg) = Themes.colorFor(theme, key, r, i)
+                  val frame = FrameLayout(this)
+                  frame.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, key.w).apply {
+                      setMargins(dp(2), dp(3), dp(2), dp(3))
+                  }
+                  val shape = GradientDrawable()
+                  shape.cornerRadius = dpf(9f)
+                  shape.setColor(bg)
+                  if (key.kind == Kind.SHIFT && shift > 0) shape.setStroke(dp(2), Color.parseColor("#F6C628"))
+                  frame.background = shape
+                  frame.elevation = dpf(1.5f)
+
+                  val main = labelFor(key)
+                  if (key.kind == Kind.DEL) {
+                      val icon = ImageView(this)
+                      icon.setImageResource(android.R.drawable.ic_input_delete)
+                      icon.setColorFilter(fg)
+                      icon.layoutParams = FrameLayout.LayoutParams(dp(26), dp(26), Gravity.CENTER)
+                      frame.addView(icon)
+                  } else if (main.isNotEmpty()) {
+                      val tv = TextView(this)
+                      tv.text = show(main)
+                      tv.setTextColor(fg)
+                      tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (main.codePointCount(0, main.length) > 2) 14f else 20f)
+                      tv.typeface = Typeface.DEFAULT_BOLD
+                      tv.gravity = Gravity.CENTER
+                      tv.layoutParams = FrameLayout.LayoutParams(
+                          ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+                      )
+                      frame.addView(tv)
+                  }
+
+                  val hint = hintFor(key)
+                  if (hint != null) {
+                      val h = TextView(this)
+                      h.text = show(hint)
+                      h.setTextColor(fg)
+                      h.alpha = 0.7f
+                      h.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+                      val lp = FrameLayout.LayoutParams(
+                          ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                          Gravity.TOP or Gravity.END
+                      )
+                      lp.setMargins(0, dp(3), dp(5), 0)
+                      h.layoutParams = lp
+                      frame.addView(h)
+                  }
+
+                  attach(frame, key)
+                  return frame
+              }
+
+              // ---------- touch handling ----------
+
+              @SuppressLint("ClickableViewAccessibility")
+              private fun attach(v: View, key: Key) {
+                  var longFired = false
+                  val longRun = Runnable {
+                      val alt = if (shift > 0) key.altS else key.altN
+                      if (alt != null) {
+                          longFired = true
+                          commit(alt)
+                          v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                          afterChar()
+                      }
+                  }
+                  val repeat = object : Runnable {
+                      override fun run() {
+                          doDelete()
+                          handler.postDelayed(this, 55)
+                      }
+                  }
+                  v.setOnTouchListener { _, e ->
+                      when (e.actionMasked) {
+                          MotionEvent.ACTION_DOWN -> {
+                              longFired = false
+                              v.alpha = 0.78f
+                              v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                              if (key.kind == Kind.DEL) {
+                                  doDelete()
+                                  handler.postDelayed(repeat, 400)
+                              } else if (key.kind == Kind.CHAR && (if (shift > 0) key.altS else key.altN) != null) {
+                                  handler.postDelayed(longRun, 380)
+                              }
+                          }
+                          MotionEvent.ACTION_UP -> {
+                              v.alpha = 1f
+                              handler.removeCallbacks(longRun)
+                              handler.removeCallbacks(repeat)
+                              if (!longFired && key.kind != Kind.DEL) onKey(key)
+                          }
+                          MotionEvent.ACTION_CANCEL -> {
+                              v.alpha = 1f
+                              handler.removeCallbacks(longRun)
+                              handler.removeCallbacks(repeat)
+                          }
+                      }
+                      true
+                  }
+              }
+
+              private fun onKey(key: Key) {
+                  when (key.kind) {
+                      Kind.CHAR -> {
+                          commit(if (shift > 0) key.s else key.n)
+                          afterChar()
+                      }
+                      Kind.SHIFT -> {
+                          shift = (shift + 1) % 3
+                          render()
+                      }
+                      Kind.SPACE -> commit(" ")
+                      Kind.ENTER -> doEnter()
+                      Kind.SYM -> {
+                          mode = Mode.SYM
+                          shift = 0
+                          render()
+                      }
+                      Kind.ABC -> {
+                          mode = lang
+                          shift = 0
+                          render()
+                      }
+                      Kind.LANG -> {
+                          lang = if (lang == Mode.JATIYA) Mode.EN else Mode.JATIYA
+                          mode = lang
+                          shift = 0
+                          render()
+                      }
+                      else -> Unit
+                  }
+              }
+
+              private fun afterChar() {
+                  if (shift == 1) {
+                      shift = 0
+                      render()
+                  }
+              }
+
+              private fun commit(text: String) {
+                  currentInputConnection?.commitText(text, 1)
+              }
+
+              private fun doDelete() {
+                  sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL)
+              }
+
+              private fun doEnter() {
+                  val ei = currentInputEditorInfo
+                  if (ei == null) {
+                      sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER)
+                      return
+                  }
+                  val multiLine = (ei.inputType and InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0
+                  val noAction = (ei.imeOptions and EditorInfo.IME_FLAG_NO_ENTER_ACTION) != 0
+                  val action = ei.imeOptions and EditorInfo.IME_MASK_ACTION
+                  if (multiLine || noAction || action == EditorInfo.IME_ACTION_NONE || action == EditorInfo.IME_ACTION_UNSPECIFIED) {
+                      sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER)
+                  } else {
+                      currentInputConnection?.performEditorAction(action)
+                  }
+              }
+          }
+          RONGIN_EOF
+          mkdir -p app/src/main/java/com/rongin/banglakb
+          cat > app/src/main/java/com/rongin/banglakb/Layouts.kt <<'RONGIN_EOF'
+          package com.rongin.banglakb
+
+          enum class Kind { CHAR, SHIFT, DEL, ENTER, SPACE, SYM, ABC, LANG, PAD }
+
+          /**
+           * One key. [n] is the normal label/output, [s] the shifted one.
+           * [altN] / [altS] are the small corner characters typed by holding the key
+           * (in normal / shifted state). Function keys keep their label in [n].
+           */
+          class Key(
+              val n: String,
+              val s: String = n,
+              val altN: String? = null,
+              val altS: String? = null,
+              val w: Float = 1f,
+              val kind: Kind = Kind.CHAR,
+              val fn: Boolean = false,
+          )
+
+          object Layouts {
+              private const val BN_DIGITS = "০১২৩৪৫৬৭৮৯"
+              private val shiftedDigits = listOf("!", "@", "#", "৳", "%", "ঁ", "&", "*", "(", ")")
+
+              /** Letter key whose hold-character is its shifted character. */
+              private fun k(n: String, s: String, altN: String? = s, altS: String? = null) = Key(n, s, altN, altS)
+
+              private fun fk(kind: Kind, label: String = "", w: Float = 1f) = Key(label, label, null, null, w, kind, true)
+
+              private fun pad(w: Float) = Key("", "", null, null, w, Kind.PAD)
+
+              private fun punct(c: String) = Key(n = c, fn = true)
+
+              /** Bangla national (Jatiya) layout. */
+              val jatiya: List<List<Key>> = listOf(
+                  "1234567890".mapIndexed { i, d ->
+                      Key(BN_DIGITS[d - '0'].toString(), shiftedDigits[i], d.toString(), null)
+                  },
+                  listOf(
+                      k("ঙ", "ং"), k("য", "য়"), k("ড", "ঢ"), k("প", "ফ"), k("ট", "ঠ"),
+                      k("চ", "ছ"), k("জ", "ঝ"), k("হ", "ঞ"), k("গ", "ঘ"), k("ড়", "ঢ়"),
+                  ),
+                  listOf(pad(0.5f)) + listOf(
+                      k("ৃ", "ঋ"), k("ু", "ূ", "উ", "ঊ"), k("ি", "ী", "ই", "ঈ"), k("ব", "ভ"), k("্", "র্", null, null),
+                      k("া", "অ", "আ", null), k("ক", "খ"), k("ত", "থ", "ৎ", null), k("দ", "ধ"),
+                  ) + listOf(pad(0.5f)),
+                  listOf(fk(Kind.SHIFT, "⇧", 1.5f)) + listOf(
+                      k("ঁ", "ঃ"), k("ো", "ৌ", "ও", "ঔ"), k("ে", "ৈ", "এ", "ঐ"), k("র", "ল"),
+                      k("ন", "ণ"), k("স", "ষ"), k("ম", "শ"),
+                  ) + listOf(fk(Kind.DEL, "", 1.5f)),
+                  listOf(
+                      fk(Kind.SYM, "?123", 1.4f), fk(Kind.LANG, "EN", 1f), punct(","),
+                      fk(Kind.SPACE, "জাতীয়", 3.6f), punct("।"), fk(Kind.ENTER, "↵", 1.4f),
+                  ),
+              )
+
+              private fun letters(s: String) = s.map { Key(it.toString(), it.uppercaseChar().toString()) }
+
+              val english: List<List<Key>> = listOf(
+                  "1234567890".mapIndexed { i, d -> Key(d.toString(), "!@#\$%^&*()"[i].toString()) },
+                  letters("qwertyuiop"),
+                  listOf(pad(0.5f)) + letters("asdfghjkl") + listOf(pad(0.5f)),
+                  listOf(fk(Kind.SHIFT, "⇧", 1.5f)) + letters("zxcvbnm") + listOf(fk(Kind.DEL, "", 1.5f)),
+                  listOf(
+                      fk(Kind.SYM, "?123", 1.4f), fk(Kind.LANG, "বাংলা", 1.2f), punct(","),
+                      fk(Kind.SPACE, "English", 3.4f), punct("."), fk(Kind.ENTER, "↵", 1.4f),
+                  ),
+              )
+
+              private fun chars(s: String) = s.map { Key(it.toString()) }
+
+              val symbols: List<List<Key>> = listOf(
+                  chars("1234567890"),
+                  chars("@#\$৳%&-+()"),
+                  listOf(pad(0.25f)) + chars("*\"':;!?/") + listOf(fk(Kind.DEL, "", 1.5f), pad(0.25f)),
+                  listOf(
+                      fk(Kind.ABC, "ABC", 1.4f), punct(","), fk(Kind.SPACE, "", 3.6f),
+                      punct("."), punct("।"), fk(Kind.ENTER, "↵", 1.4f),
+                  ),
+              )
+          }
+          RONGIN_EOF
+          mkdir -p app/src/main/java/com/rongin/banglakb
+          cat > app/src/main/java/com/rongin/banglakb/MainActivity.kt <<'RONGIN_EOF'
+          package com.rongin.banglakb
+
+          import android.app.Activity
+          import android.content.Context
+          import android.content.Intent
+          import android.os.Bundle
+          import android.provider.Settings
+          import android.view.inputmethod.InputMethodManager
+          import android.widget.Button
+          import android.widget.EditText
+          import android.widget.LinearLayout
+          import android.widget.ScrollView
+          import android.widget.TextView
+          import android.widget.Toast
+
+          /** Setup screen: turn the keyboard on, pick it, choose a colour theme, try it out. */
+          class MainActivity : Activity() {
+
+              private fun dp(v: Int): Int = (v * resources.displayMetrics.density + 0.5f).toInt()
+
+              private fun title(text: String, size: Float): TextView {
+                  val tv = TextView(this)
+                  tv.text = text
+                  tv.textSize = size
+                  tv.setPadding(0, dp(12), 0, dp(6))
+                  return tv
+              }
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  val col = LinearLayout(this)
+                  col.orientation = LinearLayout.VERTICAL
+                  col.setPadding(dp(18), dp(24), dp(18), dp(24))
+
+                  col.addView(title("রঙিন বাংলা কিবোর্ড", 26f))
+                  col.addView(title("ধাপ ১: কিবোর্ড চালু করুন", 16f))
+                  val enable = Button(this)
+                  enable.text = "কিবোর্ড সেটিংস খুলুন"
+                  enable.setOnClickListener {
+                      startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
+                  }
+                  col.addView(enable)
+
+                  col.addView(title("ধাপ ২: এই কিবোর্ড বেছে নিন", 16f))
+                  val pick = Button(this)
+                  pick.text = "কিবোর্ড বদলান"
+                  pick.setOnClickListener {
+                      val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                      imm.showInputMethodPicker()
+                  }
+                  col.addView(pick)
+
+                  col.addView(title("কী-র রঙ", 16f))
+                  Themes.all.forEachIndexed { index, theme ->
+                      val b = Button(this)
+                      b.text = theme.name
+                      b.setBackgroundColor(Themes.swatch(theme.cycle[0]))
+                      b.setTextColor(Themes.labelColor(theme.cycle[0]))
+                      b.setOnClickListener {
+                          Themes.save(this, index)
+                          Toast.makeText(this, theme.name + " রঙ বেছে নেওয়া হয়েছে", Toast.LENGTH_SHORT).show()
+                      }
+                      col.addView(b)
+                  }
+
+                  col.addView(title("এখানে টাইপ করে দেখুন", 16f))
+                  val test = EditText(this)
+                  test.hint = "এখানে চাপুন"
+                  col.addView(test)
+
+                  val scroll = ScrollView(this)
+                  scroll.addView(col)
+                  setContentView(scroll)
+              }
+          }
+          RONGIN_EOF
+          mkdir -p app/src/main/java/com/rongin/banglakb
+          cat > app/src/main/java/com/rongin/banglakb/Themes.kt <<'RONGIN_EOF'
+          package com.rongin.banglakb
+
+          import android.content.Context
+          import android.graphics.Color
+
+          /** Key colour themes. Colours are (key background, label colour). */
+          object Themes {
+              class Theme(val name: String, val cycle: IntArray, val fn: Int, val enter: Int)
+
+              private val pal = listOf(
+                  "#F6C628" to "#1B1505", // 0 হলুদ
+                  "#2563D9" to "#FFFFFF", // 1 নীল
+                  "#F3F2EE" to "#16171B", // 2 সাদা
+                  "#E5392F" to "#FFFFFF", // 3 লাল
+                  "#1D1F27" to "#F2F2F2", // 4 কালো
+                  "#27B37A" to "#04140D", // 5 সবুজ
+                  "#EE5C9B" to "#2B0715", // 6 গোলাপি
+                  "#7B57E0" to "#FFFFFF", // 7 বেগুনি
+                  "#F58A1F" to "#1B0E02", // 8 কমলা
+              )
+
+              val all = listOf(
+                  Theme("রংধনু", intArrayOf(0, 1, 2, 3), 4, 3),
+                  Theme("সমুদ্র", intArrayOf(1, 2), 4, 0),
+                  Theme("ক্যান্ডি", intArrayOf(6, 2, 7), 4, 0),
+                  Theme("বন", intArrayOf(5, 2, 4), 0, 8),
+                  Theme("সূর্যাস্ত", intArrayOf(8, 0, 3), 4, 7),
+                  Theme("রাত", intArrayOf(4), 7, 0),
+              )
+
+              private const val PREFS = "kb"
+
+              fun current(ctx: Context): Int =
+                  ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt("theme", 0).coerceIn(0, all.size - 1)
+
+              fun save(ctx: Context, index: Int) {
+                  ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putInt("theme", index).apply()
+              }
+
+              fun swatch(index: Int): Int = Color.parseColor(pal[index].first)
+
+              fun labelColor(index: Int): Int = Color.parseColor(pal[index].second)
+
+              fun colorFor(theme: Int, key: Key, row: Int, col: Int): Pair<Int, Int> {
+                  val t = all[theme]
+                  val idx = when {
+                      key.kind == Kind.ENTER -> t.enter
+                      key.fn -> t.fn
+                      else -> t.cycle[(row * 2 + col) % t.cycle.size]
+                  }
+                  return Color.parseColor(pal[idx].first) to Color.parseColor(pal[idx].second)
+              }
+          }
+          RONGIN_EOF
+          mkdir -p app/src/main/res/drawable
+          cat > app/src/main/res/drawable/ic_launcher.xml <<'RONGIN_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path
+                  android:fillColor="#07080B"
+                  android:pathData="M0,0h108v108h-108z" />
+              <path
+                  android:fillColor="#F6C628"
+                  android:pathData="M16,16h36v36h-36z" />
+              <path
+                  android:fillColor="#2563D9"
+                  android:pathData="M56,16h36v36h-36z" />
+              <path
+                  android:fillColor="#F3F2EE"
+                  android:pathData="M16,56h36v36h-36z" />
+              <path
+                  android:fillColor="#E5392F"
+                  android:pathData="M56,56h36v36h-36z" />
+          </vector>
+          RONGIN_EOF
+          mkdir -p app/src/main/res/values
+          cat > app/src/main/res/values/strings.xml <<'RONGIN_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">রঙিন বাংলা কিবোর্ড</string>
+              <string name="ime_name">রঙিন বাংলা (জাতীয়)</string>
+          </resources>
+          RONGIN_EOF
+          mkdir -p app/src/main/res/xml
+          cat > app/src/main/res/xml/method.xml <<'RONGIN_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <input-method xmlns:android="http://schemas.android.com/apk/res/android"
+              android:settingsActivity="com.rongin.banglakb.MainActivity">
+              <subtype
+                  android:imeSubtypeLocale="bn_BD"
+                  android:imeSubtypeMode="keyboard"
+                  android:label="@string/ime_name" />
+          </input-method>
+          RONGIN_EOF
+          cat > build.gradle.kts <<'RONGIN_EOF'
+          plugins {
+              id("com.android.application") version "8.5.2" apply false
+              id("org.jetbrains.kotlin.android") version "1.9.24" apply false
+          }
+          RONGIN_EOF
+          cat > gradle.properties <<'RONGIN_EOF'
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=false
+          android.nonTransitiveRClass=true
+          kotlin.code.style=official
+          RONGIN_EOF
+          cat > settings.gradle.kts <<'RONGIN_EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "RonginBanglaKeyboard"
+          include(":app")
+          RONGIN_EOF
+      - name: Build APK
+        run: gradle assembleDebug --no-daemon
+      - name: Keep APK as build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rongin-bangla-keyboard-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+      - name: Publish APK to Releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk rongin-bangla-keyboard.apk
+          gh release create "v${{ github.run_number }}" rongin-bangla-keyboard.apk --repo "${{ github.repository }}" --title "Rongin Bangla Keyboard v${{ github.run_number }}" --notes "Install rongin-bangla-keyboard.apk on your phone."
