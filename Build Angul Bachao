@@ -1,0 +1,1820 @@
+name: Build Angul Bachao APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write project files
+        run: |
+          mkdir -p angul-app/app
+          cat > angul-app/app/build.gradle.kts <<'ANGUL_EOF'
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+          }
+
+          android {
+              namespace = "com.angulbachao.app"
+              compileSdk = 34
+
+              defaultConfig {
+                  applicationId = "com.angulbachao.app"
+                  minSdk = 26
+                  targetSdk = 34
+                  versionCode = 1
+                  versionName = "1.0"
+              }
+
+              buildTypes {
+                  release {
+                      isMinifyEnabled = false
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+          }
+          ANGUL_EOF
+          mkdir -p angul-app/app/src/main
+          cat > angul-app/app/src/main/AndroidManifest.xml <<'ANGUL_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <uses-permission android:name="android.permission.VIBRATE" />
+
+              <queries>
+                  <intent>
+                      <action android:name="android.intent.action.MAIN" />
+                      <category android:name="android.intent.category.LAUNCHER" />
+                  </intent>
+              </queries>
+
+              <application
+                  android:allowBackup="false"
+                  android:icon="@mipmap/ic_launcher"
+                  android:roundIcon="@mipmap/ic_launcher_round"
+                  android:label="@string/app_name"
+                  android:theme="@android:style/Theme.Material.NoActionBar">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:windowSoftInputMode="adjustPan">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+
+                  <activity
+                      android:name=".RewardActivity"
+                      android:exported="false" />
+
+                  <service
+                      android:name=".GuardService"
+                      android:exported="true"
+                      android:label="@string/app_name"
+                      android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+                      <intent-filter>
+                          <action android:name="android.accessibilityservice.AccessibilityService" />
+                      </intent-filter>
+                      <meta-data
+                          android:name="android.accessibilityservice"
+                          android:resource="@xml/accessibility_config" />
+                  </service>
+              </application>
+          </manifest>
+          ANGUL_EOF
+          mkdir -p angul-app/app/src/main/java/com/angulbachao/app
+          cat > angul-app/app/src/main/java/com/angulbachao/app/BarChartView.kt <<'ANGUL_EOF'
+          package com.angulbachao.app
+
+          import android.content.Context
+          import android.graphics.Canvas
+          import android.graphics.DashPathEffect
+          import android.graphics.Paint
+          import android.graphics.RectF
+          import android.view.View
+          import kotlin.math.max
+
+          /** শেষ ৭ দিনের সোশ্যাল মিডিয়া সময় (মিনিট)। লাল = ঐদিন আঙুল কাটা গেছে, সবুজ = নিরাপদ */
+          class BarChartView(ctx: Context) : View(ctx) {
+
+              private var mins = IntArray(7)
+              private var cuts = IntArray(7)
+              private var labels: List<String> = List(7) { "" }
+              private var limit = 120
+              private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+
+              fun setData(m: IntArray, c: IntArray, l: List<String>, lim: Int) {
+                  mins = m
+                  cuts = c
+                  labels = l
+                  limit = lim
+                  invalidate()
+              }
+
+              override fun onDraw(c: Canvas) {
+                  val w = width.toFloat()
+                  val h = height.toFloat()
+                  val d = resources.displayMetrics.density
+                  val top = 16f * d
+                  val bottom = h - 22f * d
+                  val maxV = max(limit, mins.maxOrNull() ?: 0).coerceAtLeast(1)
+                  val slot = w / 7f
+                  val bw = slot * 0.5f
+
+                  for (i in 0 until 7) {
+                      val bh = (mins[i].toFloat() / maxV) * (bottom - top)
+                      val x = i * slot + (slot - bw) / 2f
+                      p.style = Paint.Style.FILL
+                      p.color = if (cuts[i] > 0) 0xFFD32F2F.toInt() else 0xFF43A047.toInt()
+                      c.drawRoundRect(RectF(x, bottom - bh, x + bw, bottom), 6f * d, 6f * d, p)
+                      p.color = 0xFFB0BEC5.toInt()
+                      p.textSize = 11f * d
+                      p.textAlign = Paint.Align.CENTER
+                      c.drawText(labels[i], x + bw / 2f, h - 6f * d, p)
+                      if (mins[i] > 0) {
+                          c.drawText(bn(mins[i]), x + bw / 2f, bottom - bh - 4f * d, p)
+                      }
+                  }
+
+                  val ly = bottom - limit.toFloat() / maxV * (bottom - top)
+                  p.style = Paint.Style.STROKE
+                  p.color = 0x88FFFFFF.toInt()
+                  p.strokeWidth = 1.5f * d
+                  p.pathEffect = DashPathEffect(floatArrayOf(10f * d, 8f * d), 0f)
+                  c.drawLine(0f, ly, w, ly, p)
+                  p.pathEffect = null
+              }
+          }
+          ANGUL_EOF
+          mkdir -p angul-app/app/src/main/java/com/angulbachao/app
+          cat > angul-app/app/src/main/java/com/angulbachao/app/CutView.kt <<'ANGUL_EOF'
+          package com.angulbachao.app
+
+          import android.animation.ValueAnimator
+          import android.content.Context
+          import android.graphics.Canvas
+          import android.graphics.Color
+          import android.graphics.LinearGradient
+          import android.graphics.Paint
+          import android.graphics.Path
+          import android.graphics.Shader
+          import android.graphics.Typeface
+          import android.view.MotionEvent
+          import android.view.View
+          import android.view.animation.LinearInterpolator
+          import kotlin.math.cos
+          import kotlin.math.hypot
+          import kotlin.math.max
+          import kotlin.math.min
+          import kotlin.math.sin
+          import kotlin.random.Random
+
+          /** ব্লেড পড়ে → আঙুল কাটে → রক্তে স্ক্রিন ভরে যায় (পুরোটাই কার্টুন অ্যানিমেশন) */
+          class CutView(ctx: Context, private val left: Int) : View(ctx) {
+
+              private var t = 0f
+              private val tHit = 1.0f
+              private val rnd = Random(7)
+
+              private val drops = List(70) {
+                  Triple(rnd.nextFloat() * 6.28f, 250f + rnd.nextFloat() * 900f, 6f + rnd.nextFloat() * 16f)
+              }
+              private val dripX = List(14) { rnd.nextFloat() }
+              private val dripLen = List(14) { 0.12f + rnd.nextFloat() * 0.38f }
+
+              private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+              private val path = Path()
+
+              private val anim = ValueAnimator.ofFloat(0f, 4.2f).apply {
+                  duration = 4200
+                  interpolator = LinearInterpolator()
+                  addUpdateListener {
+                      t = it.animatedValue as Float
+                      invalidate()
+                  }
+              }
+
+              fun start() {
+                  anim.start()
+              }
+
+              override fun onDetachedFromWindow() {
+                  anim.cancel()
+                  super.onDetachedFromWindow()
+              }
+
+              // অ্যানিমেশন চলার সময় নিচের অ্যাপে কোনো টাচ যাবে না
+              override fun onTouchEvent(event: MotionEvent?): Boolean = true
+
+              override fun onDraw(c: Canvas) {
+                  val w = width.toFloat()
+                  val h = height.toFloat()
+                  val s = w / 1080f
+                  val fw = 170f * s
+                  val cx = w * 0.66f            // বুড়ো আঙুলের জায়গা (ডান হাতের থাম্ব-জোন)
+                  val tipY0 = h * 0.60f
+                  val cutY = tipY0 + fw * 1.15f
+                  val bw = 420f * s
+                  val bh = 520f * s
+
+                  // আবছা কালো পর্দা
+                  c.drawColor(Color.argb((min(t / 0.5f, 1f) * 150).toInt(), 0, 0, 0))
+
+                  c.save()
+                  // আঘাতের ঝাঁকুনি
+                  if (t > tHit && t < tHit + 0.35f) {
+                      val k = (1f - (t - tHit) / 0.35f) * 22f * s
+                      c.translate((Random.nextFloat() - 0.5f) * k, (Random.nextFloat() - 0.5f) * k)
+                  }
+
+                  val tipY = lerp(h, tipY0, ease(seg(t, 0f, 0.5f)))
+
+                  if (t < tHit) {
+                      Draw.finger(c, cx, tipY, fw, h)
+                  } else {
+                      // নিচের অংশ (গোড়া)
+                      c.save()
+                      c.clipRect(0f, cutY, w, h)
+                      Draw.finger(c, cx, tipY, fw, h)
+                      c.restore()
+                      p.style = Paint.Style.FILL
+                      p.color = 0xFFB00012.toInt()
+                      c.drawRect(cx - fw / 2, cutY, cx + fw / 2, cutY + 16f * s, p)
+
+                      // কাটা ডগা — উড়ে যায়
+                      val tt = t - tHit
+                      c.save()
+                      c.translate(340f * s * tt, (-650f * tt + 1400f * tt * tt) * s)
+                      c.rotate(260f * tt, cx, cutY)
+                      c.clipRect(0f, 0f, w, cutY)
+                      Draw.finger(c, cx, tipY, fw, h)
+                      p.style = Paint.Style.FILL
+                      p.color = 0xFFB00012.toInt()
+                      c.drawRect(cx - fw / 2, cutY - 16f * s, cx + fw / 2, cutY, p)
+                      c.restore()
+                  }
+
+                  // ব্লেড
+                  val yB: Float = when {
+                      t < tHit -> lerp(-bh, cutY, (t / tHit) * (t / tHit))
+                      t < tHit + 0.8f -> cutY
+                      else -> cutY - bh * ease(seg(t, tHit + 0.8f, tHit + 1.5f))
+                  }
+                  p.style = Paint.Style.STROKE
+                  p.strokeWidth = 8f * s
+                  p.color = 0xFF6D4C41.toInt()
+                  c.drawLine(cx, 0f, cx, yB - bh, p)
+
+                  path.reset()
+                  path.moveTo(cx - bw / 2, yB - bh)
+                  path.lineTo(cx + bw / 2, yB - bh)
+                  path.lineTo(cx + bw / 2, yB - 28f * s)
+                  path.lineTo(cx - bw / 2, yB + 28f * s)
+                  path.close()
+                  p.style = Paint.Style.FILL
+                  p.shader = LinearGradient(
+                      cx - bw / 2, 0f, cx + bw / 2, 0f,
+                      intArrayOf(0xFF8E9AA3.toInt(), 0xFFEEF3F6.toInt(), 0xFF6F7B84.toInt()),
+                      floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP
+                  )
+                  c.drawPath(path, p)
+                  p.shader = null
+                  p.style = Paint.Style.STROKE
+                  p.strokeWidth = 5f * s
+                  p.color = if (t >= tHit) 0xFFD50000.toInt() else Color.WHITE
+                  c.drawLine(cx - bw / 2, yB + 28f * s, cx + bw / 2, yB - 28f * s, p)
+
+                  // রক্তের ছিটা
+                  if (t > tHit && t < tHit + 1.6f) {
+                      val tt = t - tHit
+                      p.style = Paint.Style.FILL
+                      p.color = 0xFFC0101C.toInt()
+                      for ((a, sp, r) in drops) {
+                          val x = cx + cos(a) * sp * tt * s
+                          val y = cutY + sin(a) * sp * tt * s + 900f * tt * tt * s
+                          c.drawCircle(x, y, max(0f, r * s * (1f - tt / 1.8f)), p)
+                      }
+                  }
+                  c.restore()
+
+                  // পুরো স্ক্রিন রক্তে ভরে যাওয়া
+                  if (t > tHit + 0.1f) {
+                      val k = ease(seg(t, tHit + 0.1f, tHit + 1.6f))
+                      val maxR = hypot(max(cx, w - cx), max(cutY, h - cutY))
+                      p.style = Paint.Style.FILL
+                      p.color = 0xF2B3000C.toInt()
+                      c.drawCircle(cx, cutY, maxR * 1.05f * k, p)
+                  }
+
+                  // রক্তের ফোঁটা গড়িয়ে পড়া
+                  if (t > tHit + 1.0f) {
+                      val k = ease(seg(t, tHit + 1.0f, tHit + 2.2f))
+                      p.color = 0xFF7A0008.toInt()
+                      p.strokeCap = Paint.Cap.ROUND
+                      p.strokeWidth = 26f * s
+                      for (i in dripX.indices) {
+                          val x = dripX[i] * w
+                          val len = dripLen[i] * h * k
+                          p.style = Paint.Style.STROKE
+                          c.drawLine(x, 0f, x, len, p)
+                          p.style = Paint.Style.FILL
+                          c.drawCircle(x, len, 20f * s, p)
+                      }
+                      p.strokeCap = Paint.Cap.BUTT
+                  }
+
+                  // লেখা
+                  if (t > 1.5f) {
+                      val a = min((t - 1.5f) / 0.5f, 1f)
+                      p.style = Paint.Style.FILL
+                      p.textAlign = Paint.Align.CENTER
+                      p.typeface = Typeface.DEFAULT_BOLD
+                      p.color = Color.WHITE
+                      p.alpha = (a * 255).toInt()
+                      p.textSize = 110f * s
+                      c.drawText("আঙুল গেল!", w / 2, h * 0.34f, p)
+                      p.textSize = 56f * s
+                      val msg = if (left > 0) "আর ${bn(left)}টি আঙুল বাকি" else "আজ আর কোনো আঙুল নেই!"
+                      c.drawText(msg, w / 2, h * 0.34f + 90f * s, p)
+                      p.alpha = 255
+                      p.textAlign = Paint.Align.LEFT
+                  }
+              }
+          }
+          ANGUL_EOF
+          mkdir -p angul-app/app/src/main/java/com/angulbachao/app
+          cat > angul-app/app/src/main/java/com/angulbachao/app/Draw.kt <<'ANGUL_EOF'
+          package com.angulbachao.app
+
+          import android.graphics.Canvas
+          import android.graphics.LinearGradient
+          import android.graphics.Paint
+          import android.graphics.Path
+          import android.graphics.RectF
+          import android.graphics.Shader
+
+          /** CutView ও RewardView-এর সবার ব্যবহারের আঁকার সরঞ্জাম */
+          object Draw {
+              private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+              private val path = Path()
+
+              /** কার্টুন আঙুল: ডগা ওপরে (tipY), নিচে bottom পর্যন্ত */
+              fun finger(c: Canvas, cx: Float, tipY: Float, fw: Float, bottom: Float) {
+                  val r = RectF(cx - fw / 2, tipY, cx + fw / 2, bottom + fw)
+                  p.style = Paint.Style.FILL
+                  p.shader = LinearGradient(
+                      cx - fw / 2, 0f, cx + fw / 2, 0f,
+                      intArrayOf(0xFFE8A97E.toInt(), 0xFFF9CFA8.toInt(), 0xFFEBB083.toInt()),
+                      floatArrayOf(0f, 0.45f, 1f), Shader.TileMode.CLAMP
+                  )
+                  c.drawRoundRect(r, fw / 2, fw / 2, p)
+                  p.shader = null
+
+                  p.style = Paint.Style.STROKE
+                  p.strokeWidth = fw * 0.03f
+                  p.color = 0xFFB77A52.toInt()
+                  c.drawRoundRect(r, fw / 2, fw / 2, p)
+
+                  // নখ
+                  val n = RectF(cx - fw * 0.3f, tipY + fw * 0.2f, cx + fw * 0.3f, tipY + fw * 0.8f)
+                  p.style = Paint.Style.FILL
+                  p.color = 0xFFFBE4D6.toInt()
+                  c.drawRoundRect(n, fw * 0.25f, fw * 0.25f, p)
+                  p.style = Paint.Style.STROKE
+                  p.strokeWidth = fw * 0.02f
+                  p.color = 0xFFE0B9A3.toInt()
+                  c.drawRoundRect(n, fw * 0.25f, fw * 0.25f, p)
+
+                  // গিঁটের দাগ
+                  p.strokeWidth = fw * 0.025f
+                  p.color = 0x88B77A52.toInt()
+                  val y1 = tipY + fw * 1.7f
+                  val y2 = tipY + fw * 2.7f
+                  c.drawLine(cx - fw * 0.28f, y1, cx + fw * 0.28f, y1, p)
+                  c.drawLine(cx - fw * 0.28f, y2, cx + fw * 0.28f, y2, p)
+                  p.style = Paint.Style.FILL
+              }
+
+              fun heart(c: Canvas, x: Float, y: Float, s: Float, color: Int) {
+                  path.reset()
+                  path.moveTo(x, y + s * 0.4f)
+                  path.cubicTo(x + s * 1.0f, y - s * 0.2f, x + s * 0.5f, y - s * 0.9f, x, y - s * 0.3f)
+                  path.cubicTo(x - s * 0.5f, y - s * 0.9f, x - s * 1.0f, y - s * 0.2f, x, y + s * 0.4f)
+                  p.style = Paint.Style.FILL
+                  p.color = color
+                  c.drawPath(path, p)
+              }
+
+              fun star(c: Canvas, x: Float, y: Float, s: Float, color: Int) {
+                  path.reset()
+                  path.moveTo(x, y - s)
+                  path.quadTo(x, y, x + s, y)
+                  path.quadTo(x, y, x, y + s)
+                  path.quadTo(x, y, x - s, y)
+                  path.quadTo(x, y, x, y - s)
+                  p.style = Paint.Style.FILL
+                  p.color = color
+                  c.drawPath(path, p)
+              }
+          }
+          ANGUL_EOF
+          mkdir -p angul-app/app/src/main/java/com/angulbachao/app
+          cat > angul-app/app/src/main/java/com/angulbachao/app/GuardService.kt <<'ANGUL_EOF'
+          package com.angulbachao.app
+
+          import android.accessibilityservice.AccessibilityService
+          import android.content.Context
+          import android.graphics.Color
+          import android.graphics.PixelFormat
+          import android.graphics.Typeface
+          import android.graphics.drawable.GradientDrawable
+          import android.os.Handler
+          import android.os.Looper
+          import android.os.PowerManager
+          import android.os.VibrationEffect
+          import android.os.Vibrator
+          import android.view.Gravity
+          import android.view.View
+          import android.view.WindowManager
+          import android.view.accessibility.AccessibilityEvent
+          import android.view.inputmethod.InputMethodManager
+          import android.widget.TextView
+          import kotlin.math.ceil
+          import kotlin.math.max
+
+          /**
+           * কোন অ্যাপ খোলা আছে তা ধরে, সময় গোনে, সীমা পেরোলে স্ক্রিনের ওপর আঙুল-কাটা অ্যানিমেশন দেখায়
+           * এবং হোম স্ক্রিনে পাঠিয়ে দেয়। শুধু অ্যাক্সেসিবিলিটি পারমিশনই লাগে।
+           */
+          class GuardService : AccessibilityService() {
+
+              private val handler = Handler(Looper.getMainLooper())
+              private lateinit var wm: WindowManager
+              private var current: String? = null
+              private var cutView: View? = null
+              private var warnView: View? = null
+              private var lastCutAt = 0L
+              private val warned = HashSet<String>()
+
+              private val ticker = object : Runnable {
+                  override fun run() {
+                      try {
+                          onTick()
+                      } catch (e: Exception) {
+                          // সেবা যেন বন্ধ না হয়
+                      }
+                      handler.postDelayed(this, 1000)
+                  }
+              }
+
+              override fun onServiceConnected() {
+                  super.onServiceConnected()
+                  wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+                  handler.removeCallbacks(ticker)
+                  handler.post(ticker)
+              }
+
+              override fun onAccessibilityEvent(e: AccessibilityEvent?) {
+                  if (e == null || e.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+                  val pkg = e.packageName?.toString() ?: return
+                  // নিজের ওভারলের ইভেন্ট ধরব না
+                  if (pkg == packageName && (cutView != null || warnView != null)) return
+                  if (pkg == "com.android.systemui" || pkg in imePackages()) return
+                  val isNew = pkg != current
+                  current = pkg
+                  if (!Prefs.isMonitored(this, pkg) || Prefs.isPaused(this)) return
+                  if (isNew) {
+                      // নতুন করে ঢোকা: দিনের ঢোকার সীমা পেরোলে সাথে সাথে কাটা
+                      if (Prefs.opens(this, pkg) >= Prefs.openLimit(this, pkg)) {
+                          if (cutView == null && System.currentTimeMillis() - lastCutAt >= 5000) cut()
+                          return
+                      }
+                      Prefs.addOpen(this, pkg)
+                  }
+                  // সময় শেষ হলে আইকনে ক্লিক করে ঢুকলেও আবার কাটা
+                  if (shouldBlock(pkg)) cut()
+              }
+
+              override fun onInterrupt() {}
+
+              override fun onDestroy() {
+                  handler.removeCallbacksAndMessages(null)
+                  removeCut()
+                  hideWarn()
+                  super.onDestroy()
+              }
+
+              // ---------- যুক্তি ----------
+
+              private fun imePackages(): Set<String> = try {
+                  (getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager)
+                      .enabledInputMethodList.map { it.packageName }.toSet()
+              } catch (e: Exception) {
+                  emptySet()
+              }
+
+              private fun overLimit(pkg: String): Boolean {
+                  if (Prefs.inNight(this)) return true
+                  val lim = Prefs.limitMin(this, pkg) * 60
+                  val tl = Prefs.totalLimit(this) * 60
+                  return Prefs.used(this, pkg) >= lim || Prefs.totalSec(this, Prefs.day()) >= tl
+              }
+
+              private fun shouldBlock(pkg: String): Boolean {
+                  if (cutView != null) return false
+                  if (!Prefs.isMonitored(this, pkg)) return false
+                  if (Prefs.isPaused(this)) return false
+                  if (System.currentTimeMillis() - lastCutAt < 5000) return false
+                  return overLimit(pkg)
+              }
+
+              private fun onTick() {
+                  val pkg = current ?: return
+                  if (cutView != null) return
+                  val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+                  if (!pm.isInteractive) return
+                  if (!Prefs.isMonitored(this, pkg) || Prefs.isPaused(this)) return
+                  if (System.currentTimeMillis() - lastCutAt < 5000) return
+
+                  if (overLimit(pkg)) {
+                      cut()
+                      return
+                  }
+                  Prefs.addUsage(this, pkg, 1)
+
+                  val lim = Prefs.limitMin(this, pkg) * 60
+                  val tl = Prefs.totalLimit(this) * 60
+                  val usedP = Prefs.used(this, pkg)
+                  val usedT = Prefs.totalSec(this, Prefs.day())
+                  val hot = usedP >= lim * 0.8 || usedT >= tl * 0.8
+                  if (hot && warned.add(Prefs.day() + pkg)) {
+                      val remain = minOf(lim - usedP, tl - usedT)
+                      showWarn(ceil(remain / 60.0).toInt())
+                  }
+              }
+
+              // ---------- আঙুল কাটা ----------
+
+              private fun cut() {
+                  if (cutView != null) return
+                  lastCutAt = System.currentTimeMillis()
+                  hideWarn()
+                  val n = Prefs.addCut(this)
+                  val left = Prefs.MAX_FINGERS - n
+                  val v = CutView(this, left)
+                  val lp = WindowManager.LayoutParams(
+                      WindowManager.LayoutParams.MATCH_PARENT,
+                      WindowManager.LayoutParams.MATCH_PARENT,
+                      WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                          WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                          WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                      PixelFormat.TRANSLUCENT
+                  )
+                  try {
+                      wm.addView(v, lp)
+                  } catch (e: Exception) {
+                      return
+                  }
+                  cutView = v
+                  v.start()
+                  handler.postDelayed({ vibrate(longArrayOf(0, 80, 40, 260)) }, 950)
+                  handler.postDelayed({ performGlobalAction(GLOBAL_ACTION_HOME) }, 2400)
+                  handler.postDelayed({ removeCut() }, 4200)
+              }
+
+              private fun removeCut() {
+                  val v = cutView ?: return
+                  try {
+                      wm.removeView(v)
+                  } catch (e: Exception) {
+                  }
+                  cutView = null
+              }
+
+              // ---------- আগাম সতর্কতা ----------
+
+              private fun showWarn(min: Int) {
+                  if (warnView != null) return
+                  val tv = TextView(this)
+                  tv.text = "⚠ ব্লেড ওপরে উঠছে! আর মাত্র ${bn(max(min, 1))} মিনিট"
+                  tv.setTextColor(Color.WHITE)
+                  tv.textSize = 16f
+                  tv.setTypeface(null, Typeface.BOLD)
+                  tv.setPadding(dp(18), dp(10), dp(18), dp(10))
+                  tv.background = GradientDrawable().also {
+                      it.setColor(0xEEB71C1C.toInt())
+                      it.cornerRadius = dp(24).toFloat()
+                  }
+                  val lp = WindowManager.LayoutParams(
+                      WindowManager.LayoutParams.WRAP_CONTENT,
+                      WindowManager.LayoutParams.WRAP_CONTENT,
+                      WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                          WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                          WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                      PixelFormat.TRANSLUCENT
+                  )
+                  lp.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                  lp.y = dp(60)
+                  try {
+                      wm.addView(tv, lp)
+                  } catch (e: Exception) {
+                      return
+                  }
+                  warnView = tv
+                  vibrate(longArrayOf(0, 120, 80, 120))
+                  handler.postDelayed({ hideWarn() }, 5000)
+              }
+
+              private fun hideWarn() {
+                  val v = warnView ?: return
+                  try {
+                      wm.removeView(v)
+                  } catch (e: Exception) {
+                  }
+                  warnView = null
+              }
+
+              private fun vibrate(pattern: LongArray) {
+                  try {
+                      val vib = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                      vib.vibrate(VibrationEffect.createWaveform(pattern, -1))
+                  } catch (e: Exception) {
+                  }
+              }
+          }
+          ANGUL_EOF
+          mkdir -p angul-app/app/src/main/java/com/angulbachao/app
+          cat > angul-app/app/src/main/java/com/angulbachao/app/MainActivity.kt <<'ANGUL_EOF'
+          package com.angulbachao.app
+
+          import android.accessibilityservice.AccessibilityServiceInfo
+          import android.app.Activity
+          import android.app.AlertDialog
+          import android.content.Context
+          import android.content.Intent
+          import android.graphics.Color
+          import android.graphics.Typeface
+          import android.graphics.drawable.Drawable
+          import android.graphics.drawable.GradientDrawable
+          import android.os.Bundle
+          import android.os.CountDownTimer
+          import android.provider.Settings
+          import android.text.Editable
+          import android.text.InputType
+          import android.text.TextWatcher
+          import android.view.Gravity
+          import android.view.View
+          import android.view.ViewGroup
+          import android.view.accessibility.AccessibilityManager
+          import android.widget.BaseAdapter
+          import android.widget.Button
+          import android.widget.EditText
+          import android.widget.ImageView
+          import android.widget.LinearLayout
+          import android.widget.ListView
+          import android.widget.ScrollView
+          import android.widget.Switch
+          import android.widget.TextView
+
+          class AppItem(val pkg: String, val label: String, val icon: Drawable)
+
+          class MainActivity : Activity() {
+
+              private val bg = 0xFF121212.toInt()
+              private val all = ArrayList<AppItem>()
+              private var shown = ArrayList<AppItem>()
+              private var query = ""
+              private lateinit var adapter: BaseAdapter
+              private lateinit var svcCard: TextView
+              private lateinit var statTv: TextView
+              private lateinit var chart: BarChartView
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  window.statusBarColor = bg
+                  window.navigationBarColor = bg
+                  Prefs.firstDay(this)
+
+                  val list = ListView(this)
+                  list.setBackgroundColor(bg)
+                  list.divider = null
+                  list.addHeaderView(buildHeader(), null, false)
+
+                  adapter = object : BaseAdapter() {
+                      override fun getCount(): Int = shown.size
+                      override fun getItem(position: Int): Any = shown[position]
+                      override fun getItemId(position: Int): Long = position.toLong()
+                      override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
+                          val item = shown[position]
+                          val row = (convertView as? LinearLayout) ?: buildRow()
+                          val icon = row.getChildAt(0) as ImageView
+                          val name = row.getChildAt(1) as TextView
+                          val lim = row.getChildAt(2) as TextView
+                          val tick = row.getChildAt(3) as TextView
+
+                          icon.setImageDrawable(item.icon)
+                          name.text = item.label
+                          val on = Prefs.isMonitored(this@MainActivity, item.pkg)
+                          tick.text = if (on) "✓" else "✕"
+                          tick.background = GradientDrawable().also {
+                              it.shape = GradientDrawable.OVAL
+                              it.setColor(if (on) 0xFF2E7D32.toInt() else 0xFFC62828.toInt())
+                          }
+                          lim.text = "${bn(Prefs.limitMin(this@MainActivity, item.pkg))} মি • ${bn(Prefs.openLimit(this@MainActivity, item.pkg))} বার"
+                          lim.alpha = if (on) 1f else 0.35f
+                          tick.setOnClickListener { toggle(item) }
+                          lim.setOnClickListener { askLimit(item) }
+                          return row
+                      }
+                  }
+                  list.adapter = adapter
+                  list.setOnItemClickListener { parent, _, pos, _ ->
+                      val item = parent.getItemAtPosition(pos) as? AppItem ?: return@setOnItemClickListener
+                      toggle(item)
+                  }
+                  setContentView(list)
+                  loadApps()
+              }
+
+              override fun onResume() {
+                  super.onResume()
+                  refresh()
+                  checkReward()
+              }
+
+              // ---------- হেডার ----------
+
+              private fun round(color: Int, r: Float) = GradientDrawable().also {
+                  it.setColor(color)
+                  it.cornerRadius = r
+              }
+
+              private fun label(text: String, size: Float, color: Int, bold: Boolean = false): TextView {
+                  val tv = TextView(this)
+                  tv.text = text
+                  tv.textSize = size
+                  tv.setTextColor(color)
+                  if (bold) tv.setTypeface(null, Typeface.BOLD)
+                  return tv
+              }
+
+              private fun buildHeader(): View {
+                  val box = LinearLayout(this)
+                  box.orientation = LinearLayout.VERTICAL
+                  box.setPadding(dp(16), dp(24), dp(16), dp(8))
+
+                  box.addView(label("আঙুল বাঁচাও", 30f, Color.WHITE, true))
+                  box.addView(label("সীমা পেরোলেই ব্লেড!", 14f, 0xFFEF9A9A.toInt()))
+
+                  svcCard = label("⚠ সেবা চালু নেই — এখানে ট্যাপ করে অ্যাক্সেসিবিলিটি থেকে “আঙুল বাঁচাও” চালু করো।\n\nচালু করা না গেলে: ফোনের সেটিংস → অ্যাপ → আঙুল বাঁচাও → ওপরের ডানে ⋮ → “Allow restricted settings” দিয়ে আবার চেষ্টা করো।", 14f, Color.WHITE)
+                  svcCard.setPadding(dp(14), dp(12), dp(14), dp(12))
+                  svcCard.background = round(0xFFB71C1C.toInt(), dp(14).toFloat())
+                  svcCard.setOnClickListener { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+                  box.addView(svcCard, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).also {
+                      it.topMargin = dp(14)
+                  })
+
+                  statTv = label("", 15f, 0xFFE0E0E0.toInt(), true)
+                  box.addView(statTv, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).also {
+                      it.topMargin = dp(14)
+                  })
+
+                  chart = BarChartView(this)
+                  box.addView(chart, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(150)).also {
+                      it.topMargin = dp(8)
+                  })
+                  box.addView(label("শেষ ৭ দিন (মিনিট) • সবুজ = নিরাপদ, লাল = আঙুল কাটা গেছে", 11f, 0xFF90A4AE.toInt()))
+
+                  val row = LinearLayout(this)
+                  row.orientation = LinearLayout.HORIZONTAL
+                  fun btn(text: String, action: () -> Unit) {
+                      val b = Button(this)
+                      b.text = text
+                      b.setOnClickListener { action() }
+                      row.addView(b, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                  }
+                  btn("সেটিংস") { showSettings() }
+                  btn("আংটি") { showRings() }
+                  btn("জরুরি আনলক") { emergency() }
+                  box.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).also {
+                      it.topMargin = dp(10)
+                  })
+
+                  box.addView(label(
+                      "সবুজ ✓ = নজরদারির ভেতরে (সময় শেষে আঙুল কাটবে)\nলাল ✕ = বাইরে (যত খুশি চালাও)\nধূসর ঘরে (মিনিট • বার) ট্যাপ করলে ওই অ্যাপের আলাদা সময় ও ঢোকার সীমা দিতে পারবে",
+                      12f, 0xFFB0BEC5.toInt()
+                  ), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).also {
+                      it.topMargin = dp(12)
+                  })
+
+                  val search = EditText(this)
+                  search.hint = "অ্যাপ খুঁজুন"
+                  search.setHintTextColor(0xFF78909C.toInt())
+                  search.setTextColor(Color.WHITE)
+                  search.isSingleLine = true
+                  search.addTextChangedListener(object : TextWatcher {
+                      override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
+                      override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
+                      override fun afterTextChanged(s: Editable?) {
+                          query = s?.toString() ?: ""
+                          applyFilter()
+                      }
+                  })
+                  box.addView(search, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).also {
+                      it.topMargin = dp(8)
+                  })
+                  return box
+              }
+
+              private fun buildRow(): LinearLayout {
+                  val row = LinearLayout(this)
+                  row.orientation = LinearLayout.HORIZONTAL
+                  row.gravity = Gravity.CENTER_VERTICAL
+                  row.setPadding(dp(16), dp(8), dp(16), dp(8))
+
+                  val icon = ImageView(this)
+                  row.addView(icon, LinearLayout.LayoutParams(dp(40), dp(40)))
+
+                  val name = label("", 16f, Color.WHITE)
+                  row.addView(name, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also {
+                      it.leftMargin = dp(12)
+                  })
+
+                  val lim = label("", 13f, 0xFFB0BEC5.toInt())
+                  lim.setPadding(dp(10), dp(6), dp(10), dp(6))
+                  lim.background = round(0xFF263238.toInt(), dp(16).toFloat())
+                  row.addView(lim, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also {
+                      it.rightMargin = dp(10)
+                  })
+
+                  val tick = label("", 18f, Color.WHITE, true)
+                  tick.gravity = Gravity.CENTER
+                  row.addView(tick, LinearLayout.LayoutParams(dp(38), dp(38)))
+                  return row
+              }
+
+              // ---------- অ্যাপের তালিকা ----------
+
+              private fun loadApps() {
+                  Thread {
+                      val pm = packageManager
+                      val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+                      val items = pm.queryIntentActivities(intent, 0)
+                          .filter { it.activityInfo.packageName != packageName }
+                          .map { AppItem(it.activityInfo.packageName, it.loadLabel(pm).toString(), it.loadIcon(pm)) }
+                          .distinctBy { it.pkg }
+                          .sortedWith(
+                              compareBy<AppItem>(
+                                  { !Prefs.isMonitored(this@MainActivity, it.pkg) },
+                                  { it.pkg !in SocialApps.known },
+                                  { it.label.lowercase() }
+                              )
+                          )
+                      runOnUiThread {
+                          all.clear()
+                          all.addAll(items)
+                          applyFilter()
+                      }
+                  }.start()
+              }
+
+              private fun applyFilter() {
+                  shown = ArrayList(all.filter { query.isEmpty() || it.label.contains(query, true) })
+                  adapter.notifyDataSetChanged()
+              }
+
+              private fun toggle(item: AppItem) {
+                  Prefs.setMonitored(this, item.pkg, !Prefs.isMonitored(this, item.pkg))
+                  adapter.notifyDataSetChanged()
+              }
+
+              private fun askLimit(item: AppItem) {
+                  val box = LinearLayout(this)
+                  box.orientation = LinearLayout.VERTICAL
+                  box.setPadding(dp(20), dp(8), dp(20), 0)
+                  box.addView(TextView(this).also { it.text = "দিনে মোট কত মিনিট চালাতে পারবে?" })
+                  val et = EditText(this)
+                  et.inputType = InputType.TYPE_CLASS_NUMBER
+                  et.setText(Prefs.limitMin(this, item.pkg).toString())
+                  box.addView(et)
+                  box.addView(TextView(this).also {
+                      it.text = "দিনে কতবার ঢুকতে পারবে? (আজ ${bn(Prefs.opens(this, item.pkg))} বার ঢুকেছ)"
+                  })
+                  val eo = EditText(this)
+                  eo.inputType = InputType.TYPE_CLASS_NUMBER
+                  eo.setText(Prefs.openLimit(this, item.pkg).toString())
+                  box.addView(eo)
+                  AlertDialog.Builder(this)
+                      .setTitle(item.label)
+                      .setView(box)
+                      .setPositiveButton("সেভ") { _, _ ->
+                          Prefs.setLimit(this, item.pkg, (et.text.toString().toIntOrNull() ?: 30).coerceIn(0, 1440))
+                          Prefs.setOpenLimit(this, item.pkg, (eo.text.toString().toIntOrNull() ?: 10).coerceIn(0, 999))
+                          adapter.notifyDataSetChanged()
+                      }
+                      .setNegativeButton("বাতিল", null)
+                      .show()
+              }
+
+              // ---------- অবস্থা ----------
+
+              private fun serviceOn(): Boolean {
+                  val am = getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
+                  return am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+                      .any { it.resolveInfo.serviceInfo.packageName == packageName }
+              }
+
+              private fun refresh() {
+                  svcCard.visibility = if (serviceOn()) View.GONE else View.VISIBLE
+                  val today = Prefs.day()
+                  var s = "আজ: ${bn(Prefs.totalSec(this, today) / 60)} মিনিট  •  কাটা আঙুল: ${bn(Prefs.cuts(this))}/${bn(Prefs.MAX_FINGERS)}  •  টানা ${bn(Prefs.streak(this))} দিন নিরাপদ"
+                  if (Prefs.isPaused(this)) s += "\n⏸ জরুরি আনলক চালু: আর ${bn(Prefs.pausedLeftMin(this))} মিনিট"
+                  statTv.text = s
+
+                  val mins = IntArray(7)
+                  val cuts = IntArray(7)
+                  val labels = ArrayList<String>()
+                  for (i in 0 until 7) {
+                      val off = -(6 - i)
+                      val d = Prefs.day(off)
+                      mins[i] = Prefs.totalSec(this, d) / 60
+                      cuts[i] = Prefs.cuts(this, d)
+                      labels.add(Prefs.dayLabel(off))
+                  }
+                  chart.setData(mins, cuts, labels, Prefs.totalLimit(this))
+                  adapter.notifyDataSetChanged()
+              }
+
+              // ---------- পুরস্কার ----------
+
+              private fun checkReward() {
+                  val y = Prefs.day(-1)
+                  if (Prefs.rewardDone(this) == y) return
+                  if (y < Prefs.firstDay(this)) return
+                  if (!serviceOn()) return
+                  Prefs.setRewardDone(this, y)
+                  if (Prefs.cuts(this, y) > 0) return
+                  val idx = Prefs.ringsWon(this)
+                  Prefs.setRingsWon(this, idx + 1)
+                  startActivity(Intent(this, RewardActivity::class.java).putExtra("ring", idx))
+              }
+
+              private fun showRings() {
+                  val won = Prefs.ringsWon(this)
+                  val items = Rings.all.mapIndexed { i, r ->
+                      (if (i < won) "✓ " else "🔒 ") + r.name + "\n" + r.price
+                  }.toTypedArray()
+                  AlertDialog.Builder(this)
+                      .setTitle("আংটির সংগ্রহ (${bn(minOf(won, Rings.all.size))}/${bn(Rings.all.size)})")
+                      .setItems(items, null)
+                      .setPositiveButton("পরের আংটির প্রিভিউ") { _, _ ->
+                          startActivity(
+                              Intent(this, RewardActivity::class.java)
+                                  .putExtra("ring", won)
+                                  .putExtra("preview", true)
+                          )
+                      }
+                      .setNegativeButton("বন্ধ", null)
+                      .show()
+              }
+
+              // ---------- সেটিংস ----------
+
+              private fun showSettings() {
+                  val box = LinearLayout(this)
+                  box.orientation = LinearLayout.VERTICAL
+                  box.setPadding(dp(20), dp(8), dp(20), 0)
+
+                  fun field(text: String, v: Int): EditText {
+                      box.addView(TextView(this).also { it.text = text })
+                      val et = EditText(this)
+                      et.inputType = InputType.TYPE_CLASS_NUMBER
+                      et.setText(v.toString())
+                      box.addView(et)
+                      return et
+                  }
+
+                  val g = field("প্রতি অ্যাপের ডিফল্ট সীমা (মিনিট/দিন)", Prefs.globalLimit(this))
+                  val t = field("সব অ্যাপ মিলিয়ে মোট সীমা (মিনিট/দিন)", Prefs.totalLimit(this))
+                  val go = field("প্রতি অ্যাপে দিনে কতবার ঢোকা যাবে (ডিফল্ট)", Prefs.globalOpens(this))
+                  val sw = Switch(this)
+                  sw.text = "রাতের লক (এই সময়ে সোশ্যাল অ্যাপ খুললেই আঙুল কাটা)"
+                  sw.isChecked = Prefs.nightOn(this)
+                  box.addView(sw)
+                  val ns = field("রাত শুরু (ঘণ্টা, ০–২৩)", Prefs.nightStart(this))
+                  val ne = field("রাত শেষ (ঘণ্টা, ০–২৩)", Prefs.nightEnd(this))
+
+                  val sv = ScrollView(this)
+                  sv.addView(box)
+                  AlertDialog.Builder(this)
+                      .setTitle("সেটিংস")
+                      .setView(sv)
+                      .setPositiveButton("সেভ") { _, _ ->
+                          Prefs.setGlobalLimit(this, (g.text.toString().toIntOrNull() ?: 30).coerceIn(0, 1440))
+                          Prefs.setTotalLimit(this, (t.text.toString().toIntOrNull() ?: 120).coerceIn(0, 1440))
+                          Prefs.setGlobalOpens(this, (go.text.toString().toIntOrNull() ?: 10).coerceIn(0, 999))
+                          Prefs.setNight(
+                              this, sw.isChecked,
+                              (ns.text.toString().toIntOrNull() ?: 0).coerceIn(0, 23),
+                              (ne.text.toString().toIntOrNull() ?: 6).coerceIn(0, 23)
+                          )
+                          refresh()
+                      }
+                      .setNegativeButton("বাতিল", null)
+                      .show()
+              }
+
+              // ---------- জরুরি আনলক ----------
+
+              private fun emergency() {
+                  val dlg = AlertDialog.Builder(this)
+                      .setTitle("জরুরি আনলক")
+                      .setMessage("সত্যিই দরকার? ২ মিনিট অপেক্ষা করতে হবে, তারপর ১০ মিনিটের জন্য ব্লেড বন্ধ থাকবে।")
+                      .setPositiveButton("অপেক্ষা...", null)
+                      .setNegativeButton("বাদ দাও", null)
+                      .create()
+                  dlg.show()
+                  val btn = dlg.getButton(AlertDialog.BUTTON_POSITIVE)
+                  btn.isEnabled = false
+                  val timer = object : CountDownTimer(120_000, 1000) {
+                      override fun onTick(ms: Long) {
+                          btn.text = "অপেক্ষা ${bn((ms / 1000).toInt())} সেকেন্ড"
+                      }
+
+                      override fun onFinish() {
+                          btn.text = "১০ মিনিট খুলে দাও"
+                          btn.isEnabled = true
+                          btn.setOnClickListener {
+                              Prefs.pause(this@MainActivity, 10)
+                              dlg.dismiss()
+                              refresh()
+                          }
+                      }
+                  }
+                  timer.start()
+                  dlg.setOnDismissListener { timer.cancel() }
+              }
+          }
+          ANGUL_EOF
+          mkdir -p angul-app/app/src/main/java/com/angulbachao/app
+          cat > angul-app/app/src/main/java/com/angulbachao/app/Prefs.kt <<'ANGUL_EOF'
+          package com.angulbachao.app
+
+          import android.content.Context
+          import java.text.SimpleDateFormat
+          import java.util.Calendar
+          import java.util.Locale
+
+          object Prefs {
+              const val MAX_FINGERS = 10
+
+              private fun sp(c: Context) = c.getSharedPreferences("angul", Context.MODE_PRIVATE)
+
+              // ---------- তারিখ ----------
+              fun day(offset: Int = 0): String {
+                  val cal = Calendar.getInstance()
+                  cal.add(Calendar.DAY_OF_YEAR, offset)
+                  return SimpleDateFormat("yyyyMMdd", Locale.US).format(cal.time)
+              }
+
+              fun dayLabel(offset: Int): String {
+                  val cal = Calendar.getInstance()
+                  cal.add(Calendar.DAY_OF_YEAR, offset)
+                  return bn(cal.get(Calendar.DAY_OF_MONTH))
+              }
+
+              fun firstDay(c: Context): String {
+                  val s = sp(c)
+                  val d = s.getString("first_day", null)
+                  if (d != null) return d
+                  val t = day()
+                  s.edit().putString("first_day", t).apply()
+                  return t
+              }
+
+              // ---------- ফিল্টার: সবুজ টিক / লাল টিক ----------
+              fun isMonitored(c: Context, pkg: String): Boolean =
+                  sp(c).getBoolean("mon_$pkg", pkg in SocialApps.known)
+
+              fun setMonitored(c: Context, pkg: String, on: Boolean) {
+                  sp(c).edit().putBoolean("mon_$pkg", on).apply()
+              }
+
+              // ---------- সীমা ----------
+              fun globalLimit(c: Context): Int = sp(c).getInt("global_limit", 30)
+              fun setGlobalLimit(c: Context, v: Int) { sp(c).edit().putInt("global_limit", v).apply() }
+
+              fun totalLimit(c: Context): Int = sp(c).getInt("total_limit", 120)
+              fun setTotalLimit(c: Context, v: Int) { sp(c).edit().putInt("total_limit", v).apply() }
+
+              fun limitMin(c: Context, pkg: String): Int {
+                  val v = sp(c).getInt("lim_$pkg", -1)
+                  return if (v < 0) globalLimit(c) else v
+              }
+
+              fun setLimit(c: Context, pkg: String, v: Int) { sp(c).edit().putInt("lim_$pkg", v).apply() }
+
+              // ---------- দিনে কতবার ঢোকা যাবে ----------
+              fun globalOpens(c: Context): Int = sp(c).getInt("global_opens", 10)
+              fun setGlobalOpens(c: Context, v: Int) { sp(c).edit().putInt("global_opens", v).apply() }
+
+              fun openLimit(c: Context, pkg: String): Int {
+                  val v = sp(c).getInt("olim_$pkg", -1)
+                  return if (v < 0) globalOpens(c) else v
+              }
+
+              fun setOpenLimit(c: Context, pkg: String, v: Int) { sp(c).edit().putInt("olim_$pkg", v).apply() }
+
+              fun opens(c: Context, pkg: String): Int = sp(c).getInt("o_${day()}_$pkg", 0)
+
+              fun addOpen(c: Context, pkg: String) {
+                  sp(c).edit().putInt("o_${day()}_$pkg", opens(c, pkg) + 1).apply()
+              }
+
+              // ---------- রাতের লক ----------
+              fun nightOn(c: Context): Boolean = sp(c).getBoolean("night_on", false)
+              fun nightStart(c: Context): Int = sp(c).getInt("night_start", 0)
+              fun nightEnd(c: Context): Int = sp(c).getInt("night_end", 6)
+
+              fun setNight(c: Context, on: Boolean, start: Int, end: Int) {
+                  sp(c).edit().putBoolean("night_on", on).putInt("night_start", start).putInt("night_end", end).apply()
+              }
+
+              fun inNight(c: Context): Boolean {
+                  if (!nightOn(c)) return false
+                  val h = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+                  val s = nightStart(c)
+                  val e = nightEnd(c)
+                  return if (s < e) h in s until e else (h >= s || h < e)
+              }
+
+              // ---------- ব্যবহারের সময় (সেকেন্ড) ----------
+              fun used(c: Context, pkg: String): Int = sp(c).getInt("u_${day()}_$pkg", 0)
+
+              fun totalSec(c: Context, d: String): Int = sp(c).getInt("t_$d", 0)
+
+              fun addUsage(c: Context, pkg: String, sec: Int) {
+                  val d = day()
+                  val s = sp(c)
+                  s.edit()
+                      .putInt("u_${d}_$pkg", s.getInt("u_${d}_$pkg", 0) + sec)
+                      .putInt("t_$d", s.getInt("t_$d", 0) + sec)
+                      .apply()
+              }
+
+              // ---------- কাটা আঙুল ----------
+              fun cuts(c: Context, d: String = day()): Int = sp(c).getInt("c_$d", 0)
+
+              fun addCut(c: Context): Int {
+                  val n = minOf(MAX_FINGERS, cuts(c) + 1)
+                  sp(c).edit().putInt("c_${day()}", n).apply()
+                  return n
+              }
+
+              // ---------- জরুরি আনলক ----------
+              fun isPaused(c: Context): Boolean = System.currentTimeMillis() < sp(c).getLong("paused_until", 0L)
+
+              fun pause(c: Context, minutes: Int) {
+                  sp(c).edit().putLong("paused_until", System.currentTimeMillis() + minutes * 60_000L).apply()
+              }
+
+              fun pausedLeftMin(c: Context): Int {
+                  val left = sp(c).getLong("paused_until", 0L) - System.currentTimeMillis()
+                  return if (left <= 0) 0 else ((left + 59_999) / 60_000).toInt()
+              }
+
+              // ---------- স্ট্রিক ও পুরস্কার ----------
+              fun streak(c: Context): Int {
+                  val first = firstDay(c)
+                  var n = 0
+                  for (i in 1..365) {
+                      val d = day(-i)
+                      if (d < first) break
+                      if (cuts(c, d) > 0) break
+                      n++
+                  }
+                  return n
+              }
+
+              fun ringsWon(c: Context): Int = sp(c).getInt("rings_won", 0)
+              fun setRingsWon(c: Context, v: Int) { sp(c).edit().putInt("rings_won", v).apply() }
+
+              fun rewardDone(c: Context): String = sp(c).getString("reward_done", "") ?: ""
+              fun setRewardDone(c: Context, d: String) { sp(c).edit().putString("reward_done", d).apply() }
+          }
+          ANGUL_EOF
+          mkdir -p angul-app/app/src/main/java/com/angulbachao/app
+          cat > angul-app/app/src/main/java/com/angulbachao/app/RewardActivity.kt <<'ANGUL_EOF'
+          package com.angulbachao.app
+
+          import android.app.Activity
+          import android.graphics.Color
+          import android.graphics.Typeface
+          import android.graphics.drawable.GradientDrawable
+          import android.os.Bundle
+          import android.os.Handler
+          import android.os.Looper
+          import android.view.Gravity
+          import android.view.ViewGroup
+          import android.widget.Button
+          import android.widget.FrameLayout
+          import android.widget.LinearLayout
+          import android.widget.TextView
+
+          class RewardActivity : Activity() {
+
+              private val handler = Handler(Looper.getMainLooper())
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  val idx = intent.getIntExtra("ring", 0)
+                  val preview = intent.getBooleanExtra("preview", false)
+                  val ring = Rings.all[idx % Rings.all.size]
+
+                  window.statusBarColor = 0xFFFFE3EE.toInt()
+                  window.navigationBarColor = 0xFFD9C2FF.toInt()
+
+                  val root = FrameLayout(this)
+                  val view = RewardView(this, ring)
+                  root.addView(view, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+
+                  val panel = LinearLayout(this)
+                  panel.orientation = LinearLayout.VERTICAL
+                  panel.gravity = Gravity.CENTER_HORIZONTAL
+                  panel.setPadding(dp(20), dp(18), dp(20), dp(18))
+                  panel.background = GradientDrawable().also {
+                      it.setColor(0xF2FFFFFF.toInt())
+                      it.cornerRadius = dp(24).toFloat()
+                  }
+                  panel.alpha = 0f
+
+                  fun label(text: String, size: Float, color: Int, bold: Boolean): TextView {
+                      val tv = TextView(this)
+                      tv.text = text
+                      tv.textSize = size
+                      tv.setTextColor(color)
+                      tv.gravity = Gravity.CENTER
+                      if (bold) tv.setTypeface(null, Typeface.BOLD)
+                      return tv
+                  }
+
+                  val title = if (preview) "আংটির প্রিভিউ" else "অভিনন্দন! গতকাল একটা আঙুলও যায়নি"
+                  panel.addView(label(title, 15f, 0xFF6A1B9A.toInt(), false))
+                  panel.addView(label(ring.name, 24f, 0xFF212121.toInt(), true))
+                  panel.addView(label(ring.detail, 14f, 0xFF616161.toInt(), false))
+                  panel.addView(label(ring.price, 16f, 0xFFD81B60.toInt(), true))
+
+                  val btn = Button(this)
+                  btn.text = "ঠিক আছে"
+                  btn.setOnClickListener { finish() }
+                  panel.addView(btn, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).also {
+                      it.topMargin = dp(10)
+                  })
+
+                  val lp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM)
+                  lp.setMargins(dp(16), 0, dp(16), dp(24))
+                  root.addView(panel, lp)
+
+                  setContentView(root)
+                  view.start()
+                  handler.postDelayed({ panel.animate().alpha(1f).setDuration(600).start() }, 7600)
+              }
+
+              override fun onDestroy() {
+                  handler.removeCallbacksAndMessages(null)
+                  super.onDestroy()
+              }
+          }
+          ANGUL_EOF
+          mkdir -p angul-app/app/src/main/java/com/angulbachao/app
+          cat > angul-app/app/src/main/java/com/angulbachao/app/RewardView.kt <<'ANGUL_EOF'
+          package com.angulbachao.app
+
+          import android.animation.ValueAnimator
+          import android.content.Context
+          import android.graphics.Canvas
+          import android.graphics.LinearGradient
+          import android.graphics.Paint
+          import android.graphics.Path
+          import android.graphics.RectF
+          import android.graphics.Shader
+          import android.graphics.Typeface
+          import android.view.View
+          import android.view.animation.LinearInterpolator
+          import kotlin.math.cos
+          import kotlin.math.sin
+
+          /**
+           * পুরস্কারের দৃশ্য: মেয়েটি এসে আঙুল ধরে, চুমু খায়, তারপর আংটি পরিয়ে দেয়।
+           */
+          class RewardView(ctx: Context, private val ring: Ring) : View(ctx) {
+
+              private var t = 0f
+              private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+              private val path = Path()
+
+              private val skin = 0xFFF8D2B5.toInt()
+              private val skinLine = 0xFFD9A07A.toInt()
+              private val hair = 0xFF3A2315.toInt()
+              private val dress = 0xFFE8639F.toInt()
+
+              private val anim = ValueAnimator.ofFloat(0f, 8.4f).apply {
+                  duration = 8400
+                  interpolator = LinearInterpolator()
+                  addUpdateListener {
+                      t = it.animatedValue as Float
+                      invalidate()
+                  }
+              }
+
+              fun start() {
+                  anim.start()
+              }
+
+              override fun onDetachedFromWindow() {
+                  anim.cancel()
+                  super.onDetachedFromWindow()
+              }
+
+              private fun fill(color: Int) {
+                  p.style = Paint.Style.FILL
+                  p.color = color
+              }
+
+              private fun stroke(color: Int, width: Float) {
+                  p.style = Paint.Style.STROKE
+                  p.color = color
+                  p.strokeWidth = width
+              }
+
+              private fun drawHand(c: Canvas, x: Float, y: Float, r: Float) {
+                  fill(skin)
+                  c.drawCircle(x, y, r, p)
+                  stroke(skinLine, r * 0.12f)
+                  c.drawCircle(x, y, r, p)
+              }
+
+              private fun drawRing(c: Canvas, x: Float, y: Float, fw: Float) {
+                  val oval = RectF(x - fw * 0.62f, y - fw * 0.2f, x + fw * 0.62f, y + fw * 0.2f)
+                  stroke(0xFFFFC83D.toInt(), fw * 0.13f)
+                  c.drawOval(oval, p)
+                  stroke(0xFFFFF1A8.toInt(), fw * 0.035f)
+                  c.drawOval(oval, p)
+                  // রত্ন
+                  path.reset()
+                  path.moveTo(x - fw * 0.24f, y - fw * 0.34f)
+                  path.lineTo(x - fw * 0.14f, y - fw * 0.58f)
+                  path.lineTo(x + fw * 0.14f, y - fw * 0.58f)
+                  path.lineTo(x + fw * 0.24f, y - fw * 0.34f)
+                  path.lineTo(x, y - fw * 0.1f)
+                  path.close()
+                  fill(ring.gem)
+                  c.drawPath(path, p)
+                  stroke(0xCCFFFFFF.toInt(), fw * 0.025f)
+                  c.drawPath(path, p)
+                  c.drawLine(x - fw * 0.24f, y - fw * 0.34f, x + fw * 0.24f, y - fw * 0.34f, p)
+                  c.drawLine(x - fw * 0.14f, y - fw * 0.58f, x - fw * 0.06f, y - fw * 0.34f, p)
+                  c.drawLine(x + fw * 0.14f, y - fw * 0.58f, x + fw * 0.06f, y - fw * 0.34f, p)
+              }
+
+              override fun onDraw(c: Canvas) {
+                  val w = width.toFloat()
+                  val h = height.toFloat()
+                  val s = w / 1080f
+                  val cx = w / 2f
+                  val hr = 175f * s
+                  val fw = 190f * s
+
+                  // পেছনের রং
+                  p.style = Paint.Style.FILL
+                  p.shader = LinearGradient(
+                      0f, 0f, 0f, h,
+                      0xFFFFE3EE.toInt(), 0xFFD9C2FF.toInt(), Shader.TileMode.CLAMP
+                  )
+                  c.drawRect(0f, 0f, w, h, p)
+                  p.shader = null
+
+                  // ---- সময়-নির্ভর অবস্থান ----
+                  val hy = lerp(-hr * 2.5f, h * 0.24f, ease(seg(t, 0f, 1.3f)))
+                  val sh = hy + hr * 1.35f
+                  val lipsY = hy + hr * 0.52f
+                  val baseTip = lerp(h * 1.05f, h * 0.64f, ease(seg(t, 0.2f, 1.2f)))
+                  val up = ease(seg(t, 2.3f, 3.2f)) - ease(seg(t, 4.4f, 5.3f))
+                  val tipY = baseTip + (lipsY + hr * 0.12f - baseTip) * up
+                  val kiss = t >= 3.2f && t <= 4.4f
+                  val happy = t > 7.4f
+
+                  // ---- মেয়ে: চুল (পেছনে) ----
+                  fill(hair)
+                  c.drawOval(RectF(cx - hr * 1.3f, hy - hr * 1.25f, cx + hr * 1.3f, hy + hr * 1.4f), p)
+                  c.drawRoundRect(RectF(cx - hr * 1.3f, hy, cx + hr * 1.3f, sh + hr * 1.3f), hr * 0.6f, hr * 0.6f, p)
+
+                  // পোশাক ও গলা
+                  fill(dress)
+                  c.drawRoundRect(RectF(cx - hr * 1.15f, sh, cx + hr * 1.15f, sh + hr * 1.9f), hr * 0.5f, hr * 0.5f, p)
+                  fill(skin)
+                  c.drawRect(cx - hr * 0.22f, hy + hr * 0.8f, cx + hr * 0.22f, sh + hr * 0.1f, p)
+
+                  // মুখ
+                  fill(skin)
+                  c.drawCircle(cx, hy, hr, p)
+                  // গাল
+                  fill(0x66FF6F91.toInt())
+                  c.drawCircle(cx - hr * 0.58f, hy + hr * 0.3f, hr * 0.17f, p)
+                  c.drawCircle(cx + hr * 0.58f, hy + hr * 0.3f, hr * 0.17f, p)
+                  // সামনের চুল (বাংস)
+                  fill(hair)
+                  c.drawArc(RectF(cx - hr * 1.04f, hy - hr * 1.04f, cx + hr * 1.04f, hy + hr * 1.04f), 190f, 160f, false, p)
+
+                  // চোখ
+                  val ey = hy - hr * 0.02f
+                  val er = hr * 0.14f
+                  if (kiss || happy) {
+                      stroke(0xFF2B1810.toInt(), hr * 0.05f)
+                      p.strokeCap = Paint.Cap.ROUND
+                      c.drawArc(RectF(cx - hr * 0.4f - er, ey - er * 0.6f, cx - hr * 0.4f + er, ey + er * 0.6f), 200f, 140f, false, p)
+                      c.drawArc(RectF(cx + hr * 0.4f - er, ey - er * 0.6f, cx + hr * 0.4f + er, ey + er * 0.6f), 200f, 140f, false, p)
+                      p.strokeCap = Paint.Cap.BUTT
+                  } else {
+                      fill(0xFF2B1810.toInt())
+                      c.drawOval(RectF(cx - hr * 0.4f - er * 0.7f, ey - er, cx - hr * 0.4f + er * 0.7f, ey + er), p)
+                      c.drawOval(RectF(cx + hr * 0.4f - er * 0.7f, ey - er, cx + hr * 0.4f + er * 0.7f, ey + er), p)
+                      fill(0xFFFFFFFF.toInt())
+                      c.drawCircle(cx - hr * 0.4f - er * 0.2f, ey - er * 0.35f, er * 0.28f, p)
+                      c.drawCircle(cx + hr * 0.4f - er * 0.2f, ey - er * 0.35f, er * 0.28f, p)
+                  }
+
+                  // ঠোঁট
+                  if (kiss) {
+                      fill(0xFFE53935.toInt())
+                      c.drawOval(RectF(cx - hr * 0.13f, lipsY - hr * 0.09f, cx + hr * 0.13f, lipsY + hr * 0.09f), p)
+                      fill(0x88FFFFFF.toInt())
+                      c.drawCircle(cx - hr * 0.04f, lipsY - hr * 0.03f, hr * 0.025f, p)
+                  } else {
+                      stroke(0xFFD32F2F.toInt(), hr * 0.05f)
+                      p.strokeCap = Paint.Cap.ROUND
+                      c.drawArc(RectF(cx - hr * 0.22f, hy + hr * 0.3f, cx + hr * 0.22f, hy + hr * 0.6f), 20f, 140f, false, p)
+                      p.strokeCap = Paint.Cap.BUTT
+                  }
+
+                  // ---- আংটির অবস্থান ----
+                  val rAx = cx + fw * 1.7f
+                  val rAy = baseTip - fw * 1.6f
+                  val rBx = cx
+                  val rBy = baseTip - fw * 0.75f
+                  val rCx = cx
+                  val rCy = baseTip + fw * 2.3f
+                  val k2 = ease(seg(t, 6.0f, 6.7f))
+                  val k3 = ease(seg(t, 6.7f, 7.5f))
+                  var rx = lerp(rAx, rBx, k2)
+                  var ry = lerp(rAy, rBy, k2)
+                  rx = lerp(rx, rCx, k3)
+                  ry = lerp(ry, rCy, k3)
+
+                  // ---- হাত ----
+                  val handsIn = ease(seg(t, 1.5f, 2.3f))
+                  val handY = tipY + fw * 1.3f
+                  val lhx = lerp(cx - hr * 1.15f, cx - fw * 0.78f, handsIn)
+                  val lhy = lerp(sh + hr * 1.5f, handY, handsIn)
+                  val rBaseX = lerp(cx + hr * 1.15f, cx + fw * 0.78f, handsIn)
+                  val rBaseY = lerp(sh + hr * 1.5f, handY, handsIn)
+                  val kRing = ease(seg(t, 5.2f, 5.6f)) * (1f - ease(seg(t, 7.4f, 7.9f)))
+                  val rhx = lerp(rBaseX, rx + fw * 0.95f, kRing)
+                  val rhy = lerp(rBaseY, ry, kRing)
+
+                  // বাহু
+                  stroke(skin, fw * 0.42f)
+                  p.strokeCap = Paint.Cap.ROUND
+                  c.drawLine(cx - hr * 1.0f, sh + hr * 0.4f, lhx, lhy, p)
+                  c.drawLine(cx + hr * 1.0f, sh + hr * 0.4f, rhx, rhy, p)
+                  p.strokeCap = Paint.Cap.BUTT
+
+                  // তোমার আঙুল
+                  Draw.finger(c, cx, tipY, fw, h)
+
+                  // হাত আঙুলের ওপরে
+                  drawHand(c, lhx, lhy, fw * 0.36f)
+                  drawHand(c, rhx, rhy, fw * 0.36f)
+
+                  // আংটি
+                  if (t >= 5.4f) {
+                      drawRing(c, rx, ry, fw)
+                  }
+
+                  // হৃদয় ভেসে ওঠা
+                  for (i in 0 until 7) {
+                      val st = 3.3f + i * 0.14f
+                      val age = t - st
+                      if (age in 0f..1.6f) {
+                          val hx = cx + sin(i * 2.1f) * fw * 0.9f + sin(age * 4f) * 18f * s
+                          val hyy = lipsY - hr * 0.3f - age * 320f * s
+                          val size = (24f + (i % 3) * 8f) * s
+                          val a = ((1f - age / 1.6f) * 255).toInt()
+                          Draw.heart(c, hx, hyy, size, (a shl 24) or 0x00FF4081)
+                      }
+                  }
+
+                  // "মুচ!"
+                  if (t in 3.4f..4.3f) {
+                      val a = (seg(t, 3.4f, 3.6f) * (1f - seg(t, 4.0f, 4.3f)) * 255).toInt()
+                      c.save()
+                      c.rotate(-12f, cx + hr * 1.3f, hy - hr * 0.3f)
+                      p.style = Paint.Style.FILL
+                      p.textAlign = Paint.Align.CENTER
+                      p.typeface = Typeface.DEFAULT_BOLD
+                      p.textSize = 72f * s
+                      p.color = 0xFFE91E63.toInt()
+                      p.alpha = a
+                      c.drawText("মুচ!", cx + hr * 1.3f, hy - hr * 0.3f, p)
+                      p.alpha = 255
+                      p.textAlign = Paint.Align.LEFT
+                      c.restore()
+                  }
+
+                  // ঝিকমিক
+                  if (t > 7.3f) {
+                      val glow = ring.gem and 0x00FFFFFF or 0x33000000
+                      fill(glow)
+                      c.drawCircle(rCx, rCy, fw * (1.0f + 0.1f * sin(t * 6f)), p)
+                      for (i in 0 until 6) {
+                          val ang = i * 1.047f + t
+                          val rad = fw * (0.9f + 0.15f * sin(t * 5f + i))
+                          val x = rCx + cos(ang) * rad
+                          val y = rCy + sin(ang) * rad * 0.8f
+                          val size = (14f + 10f * sin(t * 8f + i)) * s
+                          Draw.star(c, x, y, size, 0xFFFFE082.toInt())
+                      }
+                  }
+              }
+          }
+          ANGUL_EOF
+          mkdir -p angul-app/app/src/main/java/com/angulbachao/app
+          cat > angul-app/app/src/main/java/com/angulbachao/app/Rings.kt <<'ANGUL_EOF'
+          package com.angulbachao.app
+
+          class Ring(val name: String, val detail: String, val price: String, val gem: Int)
+
+          /**
+           * বিশ্বের দামি আংটি, কম দাম থেকে বেশি দামের দিকে সাজানো।
+           * প্রতিটি নিরাপদ দিনে একটি করে আংটি জেতা যায়।
+           * দাম নিলামে বিক্রির আনুমানিক অঙ্ক, স্মৃতি থেকে লেখা।
+           */
+          object Rings {
+              val all = listOf(
+                  Ring(
+                      "মুসাইফ রেড শিল্ড",
+                      "৫.১১ ক্যারেটের বিরল লাল হীরা",
+                      "আনুমানিক ৮০ লক্ষ ডলার",
+                      0xFFE53935.toInt()
+                  ),
+                  Ring(
+                      "ক্রুপ ডায়মন্ড",
+                      "৩৩.১৯ ক্যারেটের হীরা, এলিজাবেথ টেলরের আংটি",
+                      "প্রায় ৮৮ লক্ষ ডলার (২০১১)",
+                      0xFFEAF6FF.toInt()
+                  ),
+                  Ring(
+                      "দ্য পারফেক্ট পিঙ্ক",
+                      "১৪.২৩ ক্যারেটের গোলাপি হীরা",
+                      "প্রায় ২.৩২ কোটি ডলার (২০১০)",
+                      0xFFFF80AB.toInt()
+                  ),
+                  Ring(
+                      "উইনস্টন ব্লু",
+                      "১৩.২২ ক্যারেটের নীল হীরা",
+                      "প্রায় ২.৩৮ কোটি ডলার (২০১৪)",
+                      0xFF4FC3F7.toInt()
+                  ),
+                  Ring(
+                      "সুইট জোসেফিন",
+                      "১৬.০৮ ক্যারেটের গোলাপি হীরা",
+                      "প্রায় ২.৮৫ কোটি ডলার (২০১৫)",
+                      0xFFF06292.toInt()
+                  ),
+                  Ring(
+                      "ব্লু মুন অফ জোসেফিন",
+                      "১২.০৩ ক্যারেটের নীল হীরা",
+                      "প্রায় ৪.৮৫ কোটি ডলার (২০১৫)",
+                      0xFF29B6F6.toInt()
+                  ),
+                  Ring(
+                      "পিঙ্ক লেগ্যাসি",
+                      "১৮.৯৬ ক্যারেটের গোলাপি হীরা",
+                      "প্রায় ৫ কোটি ডলার (২০১৮)",
+                      0xFFEC407A.toInt()
+                  ),
+                  Ring(
+                      "অপেনহাইমার ব্লু",
+                      "১৪.৬২ ক্যারেটের নীল হীরা",
+                      "প্রায় ৫.৭৫ কোটি ডলার (২০১৬)",
+                      0xFF039BE5.toInt()
+                  ),
+                  Ring(
+                      "দ্য পিঙ্ক স্টার",
+                      "৫৯.৬ ক্যারেটের গোলাপি হীরা, বিশ্বের সবচেয়ে দামি",
+                      "প্রায় ৭.১২ কোটি ডলার (২০১৭)",
+                      0xFFFF4081.toInt()
+                  )
+              )
+          }
+          ANGUL_EOF
+          mkdir -p angul-app/app/src/main/java/com/angulbachao/app
+          cat > angul-app/app/src/main/java/com/angulbachao/app/SocialApps.kt <<'ANGUL_EOF'
+          package com.angulbachao.app
+
+          object SocialApps {
+              /** এই অ্যাপগুলো শুরুতেই সবুজ টিক (নজরদারির ভেতরে) পায় */
+              val known = setOf(
+                  "com.facebook.katana",
+                  "com.facebook.lite",
+                  "com.facebook.orca",
+                  "com.facebook.mlite",
+                  "com.instagram.android",
+                  "com.google.android.youtube",
+                  "com.zhiliaoapp.musically",
+                  "com.ss.android.ugc.trill",
+                  "com.twitter.android",
+                  "com.snapchat.android",
+                  "org.telegram.messenger",
+                  "com.whatsapp",
+                  "com.reddit.frontpage",
+                  "com.pinterest",
+                  "com.linkedin.android",
+                  "com.imo.android.imoim",
+                  "com.discord"
+              )
+          }
+          ANGUL_EOF
+          mkdir -p angul-app/app/src/main/java/com/angulbachao/app
+          cat > angul-app/app/src/main/java/com/angulbachao/app/Util.kt <<'ANGUL_EOF'
+          package com.angulbachao.app
+
+          import android.content.Context
+
+          /** ইংরেজি সংখ্যাকে বাংলা সংখ্যায় বদলায় */
+          fun bn(n: Int): String =
+              n.toString().map { if (it in '0'..'9') '০' + (it - '0') else it }.joinToString("")
+
+          fun Context.dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+
+          fun lerp(a: Float, b: Float, t: Float): Float = a + (b - a) * t.coerceIn(0f, 1f)
+
+          fun seg(t: Float, a: Float, b: Float): Float = ((t - a) / (b - a)).coerceIn(0f, 1f)
+
+          fun ease(x: Float): Float = x * x * (3f - 2f * x)
+          ANGUL_EOF
+          mkdir -p angul-app/app/src/main/res/drawable
+          cat > angul-app/app/src/main/res/drawable/ic_launcher_background.xml <<'ANGUL_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path
+                  android:fillColor="#D32F2F"
+                  android:pathData="M0,0h108v108h-108z" />
+          </vector>
+          ANGUL_EOF
+          mkdir -p angul-app/app/src/main/res/drawable
+          cat > angul-app/app/src/main/res/drawable/ic_launcher_foreground.xml <<'ANGUL_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <!-- finger body -->
+              <path
+                  android:fillColor="#F9CFA8"
+                  android:pathData="M31,108 L31,47 A23,23 0 0 1 77,47 L77,108 Z" />
+              <!-- right side shade -->
+              <path
+                  android:fillColor="#E8A97E"
+                  android:pathData="M66,27.4 A23,23 0 0 1 77,47 L77,108 L66,108 Z" />
+              <!-- nail -->
+              <path
+                  android:fillColor="#FFE6D8"
+                  android:pathData="M44,42 A10,10 0 0 1 64,42 L64,52 Q64,56 60,56 L48,56 Q44,56 44,52 Z" />
+              <!-- knuckle lines -->
+              <path
+                  android:pathData="M44,72 L64,72"
+                  android:strokeColor="#B77A52"
+                  android:strokeWidth="1.4"
+                  android:strokeLineCap="round" />
+              <path
+                  android:pathData="M44,86 L64,86"
+                  android:strokeColor="#B77A52"
+                  android:strokeWidth="1.4"
+                  android:strokeLineCap="round" />
+          </vector>
+          ANGUL_EOF
+          mkdir -p angul-app/app/src/main/res/mipmap-anydpi-v26
+          cat > angul-app/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml <<'ANGUL_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@drawable/ic_launcher_background" />
+              <foreground android:drawable="@drawable/ic_launcher_foreground" />
+          </adaptive-icon>
+          ANGUL_EOF
+          mkdir -p angul-app/app/src/main/res/mipmap-anydpi-v26
+          cat > angul-app/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml <<'ANGUL_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@drawable/ic_launcher_background" />
+              <foreground android:drawable="@drawable/ic_launcher_foreground" />
+          </adaptive-icon>
+          ANGUL_EOF
+          mkdir -p angul-app/app/src/main/res/values
+          cat > angul-app/app/src/main/res/values/strings.xml <<'ANGUL_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">আঙুল বাঁচাও</string>
+              <string name="service_desc">কোন সোশ্যাল মিডিয়া অ্যাপ খোলা আছে এবং কতক্ষণ ধরে, তা দেখার জন্য এবং সময় শেষ হলে স্ক্রিনের ওপর আঙুল কাটার অ্যানিমেশন দেখানোর জন্য এই সেবা দরকার। এটি কোনো লেখা, পাসওয়ার্ড বা তথ্য পড়ে না।</string>
+          </resources>
+          ANGUL_EOF
+          mkdir -p angul-app/app/src/main/res/xml
+          cat > angul-app/app/src/main/res/xml/accessibility_config.xml <<'ANGUL_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+              android:accessibilityEventTypes="typeWindowStateChanged"
+              android:accessibilityFeedbackType="feedbackGeneric"
+              android:accessibilityFlags="flagDefault"
+              android:canRetrieveWindowContent="false"
+              android:notificationTimeout="100"
+              android:description="@string/service_desc" />
+          ANGUL_EOF
+          cat > angul-app/build.gradle.kts <<'ANGUL_EOF'
+          plugins {
+              id("com.android.application") version "8.5.2" apply false
+              id("org.jetbrains.kotlin.android") version "1.9.24" apply false
+          }
+          ANGUL_EOF
+          cat > angul-app/gradle.properties <<'ANGUL_EOF'
+          org.gradle.jvmargs=-Xmx2g -Dfile.encoding=UTF-8
+          android.nonTransitiveRClass=true
+          kotlin.code.style=official
+          ANGUL_EOF
+          cat > angul-app/settings.gradle.kts <<'ANGUL_EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "AngulBachao"
+          include(":app")
+          ANGUL_EOF
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.7
+
+      - name: Build debug APK
+        working-directory: angul-app
+        run: gradle assembleDebug --no-daemon
+
+      - name: Rename APK
+        run: cp angul-app/app/build/outputs/apk/debug/app-debug.apk angul-bachao.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: angul-bachao-apk
+          path: angul-bachao.apk
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: angul-v${{ github.run_number }}
+          name: আঙুল বাঁচাও v${{ github.run_number }}
+          files: angul-bachao.apk
