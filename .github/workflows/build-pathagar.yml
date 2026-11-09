@@ -1,0 +1,1405 @@
+name: Build Pathagar APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/build-pathagar.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write project files
+        run: |
+          mkdir -p pathagar-app/app
+          cat > pathagar-app/app/build.gradle.kts <<'PATH_EOF'
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+          }
+
+          android {
+              namespace = "com.pathagar.app"
+              compileSdk = 34
+
+              defaultConfig {
+                  applicationId = "com.pathagar.app"
+                  minSdk = 26
+                  targetSdk = 34
+                  versionCode = 1
+                  versionName = "1.0"
+              }
+
+              buildTypes {
+                  release {
+                      isMinifyEnabled = false
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+          }
+          PATH_EOF
+          mkdir -p pathagar-app/app/src/main
+          cat > pathagar-app/app/src/main/AndroidManifest.xml <<'PATH_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <uses-permission android:name="android.permission.INTERNET" />
+
+              <application
+                  android:allowBackup="false"
+                  android:hardwareAccelerated="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:roundIcon="@mipmap/ic_launcher_round"
+                  android:label="@string/app_name"
+                  android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
+                      android:screenOrientation="unspecified"
+                      android:windowSoftInputMode="adjustResize">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          PATH_EOF
+          mkdir -p pathagar-app/app/src/main/assets
+          cat > pathagar-app/app/src/main/assets/index.html <<'PATH_EOF'
+          <!doctype html>
+          <html lang="bn"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body>
+          <title>পাঠাগারের ভেতরে</title>
+          <meta name="claude:viewport-fit-sides" content="cover">
+          <link rel="preconnect" href="https://fonts.googleapis.com">
+          <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600&family=Tiro+Bangla&display=swap" rel="stylesheet">
+          <style>
+          /* Layout: full-screen first-person view; HUD pinned to the edges, one contextual action button bottom-right, virtual stick bottom-left. */
+          :root{
+            --bg:#0c0907; --ink:#f4e7c9; --dim:#b9a98a; --amber:#e3a548; --amber-ink:#1d1206;
+            --panel:rgba(22,15,10,.86); --line:rgba(244,231,201,.2); --ok:#9bd68f; --warn:#f08a5d;
+            --f-display:'Tiro Bangla','Hind Siliguri',serif; --f-body:'Hind Siliguri',system-ui,sans-serif;
+            color-scheme:dark;
+          }
+          html,body{height:100%}
+          body{background:var(--bg);color:var(--ink);font-family:var(--f-body);overflow:hidden;position:fixed;inset:0;width:100%;
+            -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+          #c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;background:var(--bg)}
+          .hud{position:fixed;z-index:5;pointer-events:none}
+          #top{left:0;right:0;top:0;display:flex;gap:8px;align-items:flex-start;justify-content:space-between;
+            padding:calc(10px + env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) 0 max(12px,env(safe-area-inset-left,0px))}
+          .pill{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 10px;font-size:14px;line-height:1.25;backdrop-filter:blur(4px)}
+          #clock b{font-family:var(--f-display);font-size:22px;font-weight:400;display:block;font-variant-numeric:tabular-nums}
+          #clock span{color:var(--dim);font-size:12px}
+          #chips{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+          #chips .pill{font-size:12.5px}
+          button{font:inherit;color:inherit;cursor:pointer}
+          #gear{pointer-events:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:13px}
+          #toast{left:50%;transform:translateX(-50%);top:calc(86px + env(safe-area-inset-top,0px));max-width:min(88vw,420px);text-align:center;
+            background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:9px 14px;font-size:15px;opacity:0;transition:opacity .35s}
+          #toast.on{opacity:1}
+          #hint{left:50%;transform:translateX(-50%);bottom:calc(150px + env(safe-area-inset-bottom,0px));max-width:min(86vw,380px);text-align:center;
+            font-size:14px;color:var(--ink);text-shadow:0 1px 6px #000,0 0 3px #000;opacity:0;transition:opacity .3s}
+          #hint.on{opacity:1}
+          #vig{position:fixed;inset:0;z-index:3;pointer-events:none;opacity:0;transition:opacity .6s;
+            background:radial-gradient(ellipse at 50% 55%,rgba(0,0,0,0) 28%,rgba(0,0,0,.88) 100%)}
+          #stick{position:fixed;z-index:6;left:max(22px,env(safe-area-inset-left,0px));bottom:calc(26px + env(safe-area-inset-bottom,0px));
+            width:120px;height:120px;border-radius:50%;background:rgba(244,231,201,.08);border:1.5px solid var(--line);touch-action:none}
+          #stick i{position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;background:rgba(244,231,201,.28);border:1.5px solid var(--line)}
+          #act{position:fixed;z-index:6;right:max(18px,env(safe-area-inset-right,0px));bottom:calc(34px + env(safe-area-inset-bottom,0px));
+            min-width:128px;max-width:46vw;padding:15px 18px;border-radius:30px;border:0;background:var(--amber);color:var(--amber-ink);font-weight:600;font-size:16px;
+            box-shadow:0 4px 18px rgba(0,0,0,.5);display:none}
+          #act:active{transform:scale(.97)}
+          #readbar{position:fixed;z-index:6;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom,0px));display:none;gap:8px}
+          #readbar button{background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:10px 14px;font-size:14px}
+          #readbar button:disabled{opacity:.35}
+          #readbar button.on{background:var(--amber);color:var(--amber-ink)}
+          .sheet{position:fixed;inset:0;z-index:20;background:rgba(8,5,3,.78);display:none;align-items:center;justify-content:center;
+            padding:max(14px,env(safe-area-inset-top,0px)) max(14px,env(safe-area-inset-right,0px)) max(14px,env(safe-area-inset-bottom,0px)) max(14px,env(safe-area-inset-left,0px))}
+          .sheet.on{display:flex}
+          .card{background:#1c140e;border:1px solid var(--line);border-radius:18px;padding:20px;width:min(100%,460px);max-height:100%;overflow:auto;-webkit-user-select:text;user-select:text}
+          .card h1{font-family:var(--f-display);font-weight:400;font-size:30px;margin:0 0 6px;line-height:1.2;text-wrap:balance}
+          .card h2{font-family:var(--f-display);font-weight:400;font-size:22px;margin:0 0 10px}
+          .card p{margin:0 0 12px;color:var(--dim);font-size:15px;line-height:1.55}
+          .big{width:100%;padding:14px;border-radius:14px;border:0;background:var(--amber);color:var(--amber-ink);font-weight:600;font-size:17px;margin-top:6px}
+          .ghost{width:100%;padding:12px;border-radius:14px;border:1px solid var(--line);background:transparent;font-size:15px;margin-top:8px}
+          .row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-top:1px solid var(--line);font-size:15px}
+          .row small{display:block;color:var(--dim);font-size:12px}
+          .row input[type=range],.row select{width:150px;accent-color:var(--amber);background:#2a1f16;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:5px;font:inherit}
+          .tg{width:48px;height:28px;border-radius:14px;background:#3a2d20;border:1px solid var(--line);position:relative;flex:none;padding:0}
+          .tg::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--dim);transition:left .2s}
+          .tg.on{background:var(--amber)}.tg.on::after{left:23px;background:var(--amber-ink)}
+          .item{display:flex;gap:12px;align-items:center;width:100%;text-align:left;background:#251a12;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:8px}
+          .item i{width:30px;height:42px;border-radius:3px;flex:none;box-shadow:inset 3px 0 0 rgba(0,0,0,.3)}
+          .item b{display:block;font-weight:600;font-size:16px}.item span{color:var(--dim);font-size:13px}
+          .txt{width:100%;background:#2a1f16;color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px;font:inherit;margin:4px 0 8px;-webkit-user-select:text;user-select:text}
+          .prog{height:10px;border-radius:5px;background:#2a1f16;border:1px solid var(--line);overflow:hidden;margin:10px 0}
+          .prog i{display:block;height:100%;width:0;background:var(--amber);transition:width .3s}
+          .stars{color:var(--amber);font-size:20px;letter-spacing:2px}
+          .err{color:var(--warn)}
+          </style>
+
+          <canvas id="c"></canvas>
+          <div id="vig"></div>
+          <div id="top" class="hud">
+            <div class="pill" id="clock"><b id="tm">০০:০০</b><span id="part"></span></div>
+            <div id="chips"><div class="pill" id="money"></div><div class="pill" id="tk" hidden></div><div class="pill" id="rd" hidden></div><div class="pill" id="fn" hidden style="color:var(--warn)"></div>
+              <button id="gear" style="pointer-events:auto">সেটিংস</button></div>
+          </div>
+          <div id="toast" class="hud"></div>
+          <div id="hint" class="hud"></div>
+          <div id="stick"><i></i></div>
+          <button id="act"></button>
+          <div id="readbar">
+            <button id="bPrev">◀</button><button id="bTorch">টর্চ</button><button id="bOpen">বই খুলুন</button><button id="bNext">▶</button>
+          </div>
+
+          <div class="sheet on" id="start"><div class="card">
+            <h1>পাঠাগারের ভেতরে</h1>
+            <p id="stP">আপনি যে সময়ে ঢুকবেন, লাইব্রেরিতেও সেই সময়টাই থাকবে।</p>
+            <p>টিকিট কাটুন, বই বেছে জানালার ধারে বা মাঝখানের টেবিলে বসুন। পড়তে পড়তে রাত নামবে, মালিক বাতি জ্বালাবেন, কখনো কারেন্ট যাবে।</p>
+            <p style="font-size:13px">বাঁ দিকের গোল বোতামে হাঁটুন, বাকি পর্দা টেনে চারদিকে তাকান। কিবোর্ডে WASD ও মাউস টানা চলবে।</p>
+            <button class="big" id="go">ভেতরে ঢুকি</button>
+            <button class="ghost" id="pdfBtn1">ফোনের পিডিএফ বই যুক্ত করুন</button>
+            <p id="stErr" class="err" style="margin:10px 0 0"></p>
+          </div></div>
+
+          <div class="sheet" id="picker"><div class="card">
+            <h2 id="pkT">বই বাছুন</h2><div id="pkL"></div>
+            <button class="ghost" id="pkAdd" hidden>ফোন থেকে পিডিএফ যুক্ত করুন</button>
+            <button class="ghost" id="pkX">থাক</button>
+          </div></div>
+
+          <div class="sheet" id="settings"><div class="card">
+            <h2>সেটিংস</h2>
+            <div class="row"><div>ফিসফিসের শব্দ<small>আশপাশের পাঠকদের কথা</small></div><button class="tg" data-k="whisper"></button></div>
+            <div class="row"><div>খসখস শব্দ<small>কাগজ ও কাপড়ের</small></div><button class="tg" data-k="rustle"></button></div>
+            <div class="row"><div>ঝিঁঝিঁ পোকা<small>শুধু রাতে</small></div><button class="tg" data-k="cricket"></button></div>
+            <div class="row"><div>পায়ের শব্দ</div><button class="tg" data-k="steps"></button></div>
+            <div class="row"><div>মোট আওয়াজ</div><input type="range" id="sVol" min="0" max="100"></div>
+            <div class="row"><div>লোডশেডিং হবে<small>মাঝে মাঝে কারেন্ট যাবে</small></div><button class="tg" data-k="shed"></button></div>
+            <div class="row"><div>সময়ের গতি</div><select id="sSpeed"><option value="1">১× (আসল)</option><option value="20">২০×</option><option value="60">৬০×</option><option value="150">১৫০×</option></select></div>
+            <div class="row"><div>ঘড়ি ঠিক করুন<small>দিন-রাত দেখতে</small></div><input type="range" id="sClock" min="0" max="239"></div>
+            <div class="row"><div>তাকানোর গতি</div><input type="range" id="sSens" min="30" max="200"></div>
+            <div class="row"><div>পরিষ্কার ছবি<small>ফোন গরম হলে বন্ধ রাখুন</small></div><button class="tg" data-k="hq"></button></div>
+            <button class="ghost" id="pdfBtn2">ফোনের পিডিএফ বই যুক্ত করুন</button>
+            <button class="big" id="sX">ঠিক আছে</button>
+          </div></div>
+
+          <div class="sheet" id="bye"><div class="card">
+            <h2>বাইরে এলেন</h2><p id="byeP"></p>
+            <button class="big" id="again">আবার ঢুকি</button>
+          </div></div>
+
+          <div class="sheet" id="bind"><div class="card">
+            <h2>মাঙ্গা বাঁধাই ঘর</h2>
+            <p>বাঁধাইকর: “অধ্যায়গুলো দিন, জুড়ে বই বানিয়ে দেব। প্রতি অধ্যায় ২ টাকা।”</p>
+            <input class="txt" id="bName" value="আমার মাঙ্গা" maxlength="40">
+            <button class="ghost" id="bPick">অধ্যায়ের পিডিএফ বাছুন (একসাথে অনেকগুলো)</button>
+            <button class="ghost" id="bSample">নমুনা: চেইনসম্যান, ২৩২ অধ্যায়</button>
+            <p id="bInfo" style="margin-top:10px"></p>
+            <div class="row"><div>বই কেমন হবে</div><select id="bMode"><option value="one">একটাই বড় বই</option><option value="vol">খণ্ডে ভাগ</option></select></div>
+            <div class="row" id="bVolRow" style="display:none"><div>প্রতি খণ্ডে অধ্যায়</div><input class="txt" type="number" id="bVol" value="30" min="5" max="100" style="width:90px;margin:0"></div>
+            <div class="prog"><i id="bBar"></i></div>
+            <button class="big" id="bGo">বাঁধাই শুরু করুন</button>
+            <button class="ghost" id="bX">বন্ধ</button>
+          </div></div>
+          <div class="sheet" id="lend"><div class="card"><h2 id="ldT"></h2><p id="ldP"></p><div id="ldL"></div><button class="ghost" id="ldX">পরে</button></div></div>
+          <input type="file" id="chIn" accept="application/pdf,.pdf" multiple hidden>
+          <input type="file" id="pdfIn" accept="application/pdf,.pdf" multiple hidden>
+
+          <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+          <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+          <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+          <script>
+          (function () {
+          "use strict";
+          var $ = function (id) { return document.getElementById(id); };
+          var bn = function (n) { return String(n).replace(/\d/g, function (d) { return "০১২৩৪৫৬৭৮৯"[d]; }); };
+          function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+          function sm(t) { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); }
+          function lerp(a, b, t) { return a + (b - a) * t; }
+          function rnd(a, b) { return a + Math.random() * (b - a); }
+          function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
+          function hash(s) { var h = 7; for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); }
+          function angDiff(a, b) { var d = (b - a) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return d; }
+
+          if (!window.THREE) { $("stErr").textContent = "থ্রিডি লাইব্রেরি লোড হয়নি। ইন্টারনেট দেখে পাতাটা আবার খুলুন।"; $("go").disabled = true; return; }
+
+          /* ---------- settings ---------- */
+          var CFG = { whisper: true, rustle: true, cricket: true, steps: true, shed: true, hq: false, vol: 70, speed: 20, sens: 100 };
+          try { var sv = JSON.parse(localStorage.getItem("pf_cfg") || "{}"); for (var k in sv) CFG[k] = sv[k]; } catch (e) {}
+          function saveCfg() { try { localStorage.setItem("pf_cfg", JSON.stringify(CFG)); } catch (e) {} }
+
+          /* ---------- renderer / scene ---------- */
+          var cv = $("c");
+          var renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true });
+          function fit() {
+            var pr = Math.min(window.devicePixelRatio || 1, CFG.hq ? 2 : 1.25);
+            renderer.setPixelRatio(pr);
+            renderer.setSize(window.innerWidth, window.innerHeight, false);
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            if (BK.ready) layoutBook();
+          }
+          var scene = new THREE.Scene();
+          var camera = new THREE.PerspectiveCamera(70, 1, 0.05, 420);
+          scene.add(camera);
+          scene.fog = new THREE.Fog(0x101a34, 60, 300);
+
+          var UB = new THREE.BoxGeometry(1, 1, 1);
+          function L(c, o) { var p = { color: c }; if (o) for (var k in o) p[k] = o[k]; return new THREE.MeshLambertMaterial(p); }
+          function B(c, o) { var p = { color: c }; if (o) for (var k in o) p[k] = o[k]; return new THREE.MeshBasicMaterial(p); }
+          function bx(w, h, d, mat, x, y, z, par) { var m = new THREE.Mesh(UB, mat); m.scale.set(w, h, d); m.position.set(x, y, z); (par || scene).add(m); return m; }
+          function ctex(w, h, fn) { var c = document.createElement("canvas"); c.width = w; c.height = h; fn(c.getContext("2d"), c); var t = new THREE.CanvasTexture(c); return t; }
+
+          /* sky */
+          var skyMat = new THREE.ShaderMaterial({
+            side: THREE.BackSide, depthWrite: false, fog: false,
+            uniforms: { top: { value: new THREE.Color(0x3f86d6) }, hor: { value: new THREE.Color(0xa8cfee) } },
+            vertexShader: "varying vec3 vD; void main(){ vD=normalize(position); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }",
+            fragmentShader: "uniform vec3 top; uniform vec3 hor; varying vec3 vD; void main(){ float h=clamp(vD.y,0.0,1.0); gl_FragColor=vec4(mix(hor,top,pow(h,0.55)),1.0); }"
+          });
+          var sky = new THREE.Mesh(new THREE.SphereGeometry(300, 24, 14), skyMat); sky.renderOrder = -10; scene.add(sky);
+          var stars = (function () {
+            var n = 420, a = new Float32Array(n * 3);
+            for (var i = 0; i < n; i++) { var u = Math.random() * Math.PI * 2, v = Math.random() * 1.35 + 0.08, r = 285; a[i * 3] = Math.cos(u) * Math.cos(v) * r; a[i * 3 + 1] = Math.sin(v) * r; a[i * 3 + 2] = Math.sin(u) * Math.cos(v) * r; }
+            var g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(a, 3));
+            var m = new THREE.PointsMaterial({ color: 0xffffff, size: 1.8, sizeAttenuation: false, transparent: true, opacity: 0, fog: false, depthWrite: false });
+            var p = new THREE.Points(g, m); scene.add(p); return p;
+          })();
+          function glowTex(inner, outer) {
+            return ctex(128, 128, function (x) { var g = x.createRadialGradient(64, 64, 0, 64, 64, 64); g.addColorStop(0, inner); g.addColorStop(0.25, inner); g.addColorStop(0.27, outer); g.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = g; x.fillRect(0, 0, 128, 128); });
+          }
+          var sunSp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex("#fff6d8", "rgba(255,200,120,.35)"), transparent: true, fog: false, depthWrite: false })); sunSp.scale.set(70, 70, 1); scene.add(sunSp);
+          var moonSp = new THREE.Sprite(new THREE.SpriteMaterial({ map: ctex(128, 128, function (x) {
+            var g = x.createRadialGradient(64, 64, 10, 64, 64, 64); g.addColorStop(0, "rgba(190,210,255,.45)"); g.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = g; x.fillRect(0, 0, 128, 128);
+            x.fillStyle = "#f2f0e6"; x.beginPath(); x.arc(64, 64, 24, 0, 7); x.fill();
+            x.fillStyle = "rgba(160,160,150,.35)"; [[56, 56, 6], [72, 70, 5], [60, 74, 4], [74, 54, 3]].forEach(function (c) { x.beginPath(); x.arc(c[0], c[1], c[2], 0, 7); x.fill(); });
+          }), transparent: true, fog: false, depthWrite: false })); moonSp.scale.set(52, 52, 1); scene.add(moonSp);
+
+          /* lights */
+          var amb = new THREE.AmbientLight(0xffffff, 0.5); scene.add(amb);
+          var hemi = new THREE.HemisphereLight(0xaaccff, 0x3a2f24, 0.3); scene.add(hemi);
+          var dirL = new THREE.DirectionalLight(0xffffff, 0.5); dirL.position.set(-10, 8, 0); scene.add(dirL);
+          var torch = new THREE.SpotLight(0xfff0d0, 0, 10, 0.55, 0.6, 1.2); camera.add(torch); torch.position.set(0.1, -0.1, 0); torch.target.position.set(0, 0, -1); camera.add(torch.target);
+
+          /* ---------- materials ---------- */
+          var floorTex = ctex(256, 256, function (x) {
+            for (var i = 0; i < 8; i++) { x.fillStyle = "hsl(28," + (38 + (i % 3) * 4) + "%," + (26 + ((i * 7) % 5)) + "%)"; x.fillRect(0, i * 32, 256, 32); x.fillStyle = "rgba(0,0,0,.35)"; x.fillRect(0, i * 32, 256, 1.5);
+              var o = (i * 83) % 256; x.fillRect(o, i * 32, 1.5, 32); }
+          });
+          floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping; floorTex.repeat.set(10, 16);
+          var M = {
+            floor: L(0xffffff, { map: floorTex }), wall: L(0xd9cba9), wood: L(0x5b3a22), woodL: L(0x8c5c34), shelf: L(0x4d3020), ceil: L(0x3a2a1f),
+            dark: L(0x2a1d14), brass: L(0xb8892f), rug: L(0x6f2630), skin: [L(0xf0c8a0), L(0xd9a273), L(0xa8734d), L(0x7a4e32)],
+            glass: B(0xaed4ea, { transparent: true, opacity: 0.1, depthWrite: false }), paper: L(0xece0c0)
+          };
+          var extMats = [];
+          function EX(c) { var m = B(c); extMats.push({ m: m, base: new THREE.Color(c) }); return m; }
+          var lampMat = B(0xffe2a0);
+          var matCache = {};
+          function MC(c) { return matCache[c] || (matCache[c] = L(c)); }
+
+          /* ---------- world layout ---------- */
+          var colliders = [];   /* [x0,z0,x1,z1] */
+          function addCol(x0, z0, x1, z1) { var c = [x0, z0, x1, z1, true]; colliders.push(c); return c; }
+          function colBox(cx, cz, w, d) { return addCol(cx - w / 2, cz - d / 2, cx + w / 2, cz + d / 2); }
+          var H3 = 3.6;
+          /* floor + ceiling */
+          var fl = new THREE.Mesh(new THREE.PlaneGeometry(20, 32), M.floor); fl.rotation.x = -Math.PI / 2; scene.add(fl);
+          bx(20, 0.1, 32, M.ceil, 0, H3 + 0.05, 0);
+          /* outer walls */
+          bx(20.6, H3, 0.3, M.wall, 0, H3 / 2, -16.15); addCol(-10.4, -16.4, 10.4, -16);
+          bx(0.3, H3, 32.6, M.wall, 10.15, H3 / 2, 0); addCol(10, -16.4, 10.4, 16.4);
+          /* front wall with door gap */
+          bx(8.8, H3, 0.3, M.wall, -5.6, H3 / 2, 16.15); bx(8.8, H3, 0.3, M.wall, 5.6, H3 / 2, 16.15);
+          bx(2.4, H3 - 2.7, 0.3, M.wall, 0, 2.7 + (H3 - 2.7) / 2, 16.15);
+          addCol(-10.4, 16, -1.2, 16.4); addCol(1.2, 16, 10.4, 16.4); addCol(-1.3, 16.3, 1.3, 17);
+          bx(0.15, 2.7, 0.4, M.wood, -1.25, 1.35, 16.15); bx(0.15, 2.7, 0.4, M.wood, 1.25, 1.35, 16.15); bx(2.65, 0.15, 0.4, M.wood, 0, 2.7, 16.15);
+          /* gate wall */
+          bx(8.7, H3, 0.25, M.wall, -5.65, H3 / 2, 8); bx(8.7, H3, 0.25, M.wall, 5.65, H3 / 2, 8); bx(2.6, H3 - 2.5, 0.25, M.wall, 0, 2.5 + (H3 - 2.5) / 2, 8);
+          addCol(-10, 7.85, -1.3, 8.15); addCol(1.3, 7.85, 10, 8.15);
+          var gateBar = bx(2.6, 0.12, 0.12, L(0xb3261e), 0, 1.0, 8); var gateCol = addCol(-1.3, 7.9, 1.3, 8.1);
+          bx(0.12, 1.0, 0.12, M.dark, -1.3, 0.5, 8); bx(0.12, 1.0, 0.12, M.dark, 1.3, 0.5, 8);
+          /* left wall with windows */
+          var WZ = [-12, -7, -2, 3, 12], WH = 1.1, SILL = 0.9, WTOP = 2.7;
+          (function () {
+            var edges = [-16.3]; WZ.forEach(function (z) { edges.push(z - WH, z + WH); }); edges.push(16.3);
+            for (var i = 0; i < edges.length; i += 2) { var a = edges[i], b = edges[i + 1]; if (b - a > 0.01) bx(0.3, H3, b - a, M.wall, -10.15, H3 / 2, (a + b) / 2); }
+            WZ.forEach(function (z) {
+              bx(0.3, SILL, WH * 2, M.wood, -10.15, SILL / 2, z); bx(0.3, H3 - WTOP, WH * 2, M.wall, -10.15, WTOP + (H3 - WTOP) / 2, z);
+              bx(0.08, WTOP - SILL, 0.07, M.frame || M.dark, -10.02, (WTOP + SILL) / 2, z); bx(0.08, 0.06, WH * 2, M.dark, -10.02, 1.8, z);
+              bx(0.08, WTOP - SILL, 0.07, M.dark, -10.02, (WTOP + SILL) / 2, z - WH); bx(0.08, WTOP - SILL, 0.07, M.dark, -10.02, (WTOP + SILL) / 2, z + WH);
+              var gl = new THREE.Mesh(new THREE.PlaneGeometry(WH * 2, WTOP - SILL), M.glass); gl.rotation.y = Math.PI / 2; gl.position.set(-10.04, (WTOP + SILL) / 2, z); scene.add(gl);
+            });
+            addCol(-10.4, -16.4, -10, 16.4);
+          })();
+          /* light shafts */
+          var shafts = [];
+          (function () {
+            var gt = ctex(4, 64, function (x) { var g = x.createLinearGradient(0, 0, 0, 64); g.addColorStop(0, "rgba(255,255,255,1)"); g.addColorStop(1, "rgba(0,0,0,1)"); x.fillStyle = g; x.fillRect(0, 0, 4, 64); });
+            WZ.forEach(function (z) {
+              var g = new THREE.BufferGeometry(), y = WTOP, w = WH;
+              var v = new Float32Array([-10, y, z - w, -10, y, z + w, -5.0, 0.02, z + w + 0.6, -5.0, 0.02, z - w + 0.6]);
+              g.setAttribute("position", new THREE.BufferAttribute(v, 3));
+              g.setAttribute("uv", new THREE.BufferAttribute(new Float32Array([0, 1, 0, 1, 0, 0, 0, 0]), 2));
+              g.setIndex([0, 1, 2, 0, 2, 3]);
+              var m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ map: gt, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+              scene.add(m); shafts.push(m);
+            });
+          })();
+          /* ceiling lamps */
+          for (var lx = -6; lx <= 6; lx += 6) for (var lz = -13; lz <= 13; lz += 4.7) {
+            bx(0.7, 0.07, 0.7, lampMat, lx, H3 - 0.05, lz); bx(0.04, 0.5, 0.04, M.dark, lx, H3 - 0.3, lz);
+          }
+          /* ground, trees, hills (outdoors) */
+          var gnd = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), EX(0x3f6b3a)); gnd.rotation.x = -Math.PI / 2; gnd.position.y = -0.05; scene.add(gnd);
+          (function () {
+            var road = new THREE.Mesh(new THREE.PlaneGeometry(8, 400), EX(0x6b655a)); road.rotation.x = -Math.PI / 2; road.position.set(-24, -0.04, 0); scene.add(road);
+            var trunk = EX(0x5a3d26), leaf = [EX(0x2f6a34), EX(0x3b7a3a), EX(0x2a5c30)];
+            for (var i = 0; i < 26; i++) {
+              var x = rnd(-60, -14), z = rnd(-60, 40); if (Math.abs(x + 24) < 6) continue;
+              var s = rnd(0.8, 1.6); bx(0.5 * s, 3 * s, 0.5 * s, trunk, x, 1.5 * s, z);
+              var c = new THREE.Mesh(new THREE.SphereGeometry(2.2 * s, 8, 6), pick(leaf)); c.position.set(x, 4.2 * s, z); c.scale.y = 1.2; scene.add(c);
+            }
+            for (var j = 0; j < 7; j++) { var h = new THREE.Mesh(new THREE.SphereGeometry(40, 10, 6), EX(0x2c4f38)); h.position.set(-170 - j * 5, -8, -120 + j * 42); h.scale.set(2, 0.9, 1.6); scene.add(h); }
+            for (var t = 0; t < 8; t++) { var x2 = rnd(-60, 60), z2 = rnd(30, 70); var s2 = rnd(1, 1.5); bx(0.5 * s2, 3 * s2, 0.5 * s2, trunk, x2, 1.5 * s2, z2); var c2 = new THREE.Mesh(new THREE.SphereGeometry(2.2 * s2, 8, 6), pick(leaf)); c2.position.set(x2, 4.2 * s2, z2); scene.add(c2); }
+          })();
+
+          /* ---------- books data ---------- */
+          var CATS = {
+            "উপন্যাস": [["পথের পাঁচালী", "বিভূতিভূষণ বন্দ্যোপাধ্যায়"], ["পদ্মা নদীর মাঝি", "মানিক বন্দ্যোপাধ্যায়"], ["দেবদাস", "শরৎচন্দ্র চট্টোপাধ্যায়"], ["লালসালু", "সৈয়দ ওয়ালীউল্লাহ্"], ["কপালকুণ্ডলা", "বঙ্কিমচন্দ্র চট্টোপাধ্যায়"], ["গৃহদাহ", "শরৎচন্দ্র চট্টোপাধ্যায়"]],
+            "কবিতা": [["সোনার তরী", "রবীন্দ্রনাথ ঠাকুর"], ["অগ্নিবীণা", "কাজী নজরুল ইসলাম"], ["রূপসী বাংলা", "জীবনানন্দ দাশ"], ["বলাকা", "রবীন্দ্রনাথ ঠাকুর"], ["সঞ্চয়িতা", "রবীন্দ্রনাথ ঠাকুর"]],
+            "বিজ্ঞান": [["আকাশের গল্প", "সংকলন"], ["পৃথিবীর বয়স কত", "সংকলন"], ["প্রাণের উৎস", "সংকলন"], ["তারার জন্ম-মৃত্যু", "সংকলন"], ["পরমাণুর ভেতর", "সংকলন"]],
+            "ইতিহাস": [["বাংলার ইতিহাস", "সংকলন"], ["মুঘল দিনলিপি", "সংকলন"], ["নদী ও সভ্যতা", "সংকলন"], ["পুরোনো ঢাকা", "সংকলন"], ["স্বাধীনতার পথে", "সংকলন"]],
+            "ভ্রমণ": [["পথে প্রবাসে", "সংকলন"], ["হিমালয়ের পথে", "সংকলন"], ["সুন্দরবনের দিনরাত্রি", "সংকলন"], ["মরুভূমির গান", "সংকলন"], ["সমুদ্রের ডাক", "সংকলন"]],
+            "রহস্য": [["অন্ধকার ঘরের চাবি", "সংকলন"], ["ভাঙা ঘড়ির রহস্য", "সংকলন"], ["রাতের ট্রেন", "সংকলন"], ["হারানো চিঠি", "সংকলন"]],
+            "গল্প সংকলন": [["নির্বাচিত ছোটগল্প", "সংকলন"], ["বর্ষার গল্প", "সংকলন"], ["গ্রামের গল্প", "সংকলন"], ["শহরের গল্প", "সংকলন"]],
+            "মাঙ্গা ও কমিক্স": [["ছবির গল্প-১", "সংকলন"], ["ছবির গল্প-২", "সংকলন"], ["নায়কের উত্থান", "সংকলন"], ["তলোয়ার ও ছায়া", "সংকলন"]],
+            "আমার বই": []
+          };
+          var BOOKCOL = [0x7a2b2b, 0x2d4a6b, 0x3f5b3a, 0x8a6a2a, 0x4a2f5c, 0x2b5a5a, 0x6b3a2a, 0x23304a, 0x5c5c3a, 0x8a3a4a, 0x35373d, 0x9a7a4a];
+          var allBooks = {}; Object.keys(CATS).forEach(function (c) { allBooks[c] = CATS[c].map(function (b) { return { t: b[0], a: b[1], cat: c, color: BOOKCOL[hash(b[0]) % BOOKCOL.length], pages: 60 + hash(b[0]) % 80 }; }); });
+          var PARA = [
+            "বৃষ্টি থেমে গেলেও জানালার কাচে জলের ফোঁটাগুলো অনেকক্ষণ ঝুলে ছিল। ঘরের ভেতরে হলুদ আলোয় পুরোনো কাগজের গন্ধ ভেসে বেড়াচ্ছিল, আর কোথাও একটা ঘড়ি ধীরে ধীরে সময় গুনে যাচ্ছিল।",
+            "সে বইটা খুলে প্রথম পাতায় আঙুল রাখল। কালির দাগ তখনও হালকা, যেন কেউ খুব যত্নে প্রতিটা অক্ষর বসিয়েছে। পাশের টেবিলে কেউ একজন খুব আস্তে পাতা ওল্টাল।",
+            "নদীর ওপারে সূর্য নামছিল। নৌকাগুলো একে একে ঘাটে ফিরে আসছে, মাঝিদের গলায় ক্লান্ত অথচ চেনা সুর। দূরে কোথাও একটা শাঁখ বেজে উঠল।",
+            "গ্রামের পথটা আঁকাবাঁকা হয়ে মাঠের মাঝখান দিয়ে চলে গেছে। দুপাশে কাশফুলের ঢেউ, মাথার ওপর সাদা মেঘ। এই পথ দিয়েই একদিন সে প্রথম শহরের দিকে রওনা দিয়েছিল।",
+            "রাত যত গভীর হয়, ততই শব্দগুলো স্পষ্ট হয়ে ওঠে। ঝিঁঝিঁর ডাক, দূরের কুকুরের ঘেউ, আর নিজের নিশ্বাসের আওয়াজ। এমন রাতে একটা ভালো বইয়ের চেয়ে ভালো সঙ্গী আর কেউ নয়।",
+            "চিঠিটা ভাঁজ করে সে বইয়ের পাতার ভেতর রেখে দিল। কত বছর আগের কথা সেটা, তবু প্রতিটা শব্দ এখনও মনে পড়ে। কিছু কথা কাগজে লেখা থাকে, কিছু কথা থাকে বুকের ভেতর।",
+            "ভোরের কুয়াশা সরে গেলে পাহাড়ের গায়ে সোনালি রোদ এসে পড়ল। পথিক থেমে একবার পেছনে তাকাল, তারপর আবার ধীরে ধীরে ওপরের দিকে উঠতে লাগল।",
+            "বিজ্ঞানের সবচেয়ে সুন্দর দিক হলো প্রশ্ন করা। কেন আকাশ নীল, কেন চাঁদ বদলায়, কেন রাতের তারাগুলো কখনো নড়ে না। প্রতিটা উত্তর আরও দশটা নতুন প্রশ্নের দরজা খুলে দেয়।",
+            "শহরের এই পুরোনো পাড়ায় এখনও সন্ধ্যা হলে লোকজন চায়ের দোকানের সামনে জড়ো হয়। কেউ খবরের কাগজ পড়ে, কেউ তর্ক জুড়ে দেয়, আর কেউ চুপচাপ কেবল শোনে।",
+            "হঠাৎ বাতি নিভে গেল। অন্ধকারে কয়েক মুহূর্ত কেউ কিছু বলল না, তারপর কোথা থেকে যেন একটা মোমবাতি জ্বলে উঠল। সেই আলোয় সবার মুখ নরম আর রহস্যময় দেখাচ্ছিল।"
+          ];
+
+          /* ---------- shelves ---------- */
+          var shelves = [], bookInst = [];
+          function makeLabel(text, w, h, x, y, z, ry) {
+            var t = ctex(256, 64, function (c) { c.fillStyle = "#2b1c11"; c.fillRect(0, 0, 256, 64); c.strokeStyle = "#b8892f"; c.lineWidth = 3; c.strokeRect(3, 3, 250, 58);
+              c.fillStyle = "#f1dfb0"; c.font = "30px 'Tiro Bangla','Hind Siliguri',serif"; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText(text, 128, 34); });
+            var m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: t })); m.position.set(x, y, z); m.rotation.y = ry; scene.add(m); return m;
+          }
+          var labelTex = [];
+          function makeShelf(cx, cz, len, axis, depth, sides, cats) {
+            var LV = 5, dx = axis === "x";
+            function P(a, p) { return dx ? [cx + a, cz + p] : [cx + p, cz + a]; }
+            /* frame */
+            for (var k = 0; k <= LV; k++) { var pp = P(0, 0); bx(dx ? len : depth, 0.04, dx ? depth : len, M.shelf, pp[0], 0.1 + k * 0.43, pp[1]); }
+            [-len / 2, len / 2].forEach(function (a) { var pp = P(a, 0); bx(dx ? 0.05 : depth, LV * 0.43 + 0.1, dx ? depth : 0.05, M.shelf, pp[0], (LV * 0.43 + 0.1) / 2 + 0.05, pp[1]); });
+            var bb = P(0, 0); bx(dx ? len : 0.03, LV * 0.43 + 0.1, dx ? 0.03 : len, M.dark, bb[0], (LV * 0.43 + 0.1) / 2 + 0.05, bb[1]);
+            /* books */
+            sides.forEach(function (sd) {
+              for (var k = 0; k < LV; k++) {
+                var a = -len / 2 + 0.08, y0 = 0.12 + k * 0.43;
+                while (a < len / 2 - 0.1) {
+                  var w = rnd(0.035, 0.095), h = rnd(0.24, 0.37), d = rnd(0.16, depth / 2 + 0.02 > 0.3 ? 0.26 : depth - 0.1);
+                  if (Math.random() < 0.05) { a += rnd(0.1, 0.25); continue; }
+                  var pr = P(a + w / 2, sd * (depth / 2 - 0.05 - d / 2) * (sides.length > 1 ? 1 : 1));
+                  if (sides.length === 1) pr = P(a + w / 2, sd * (depth / 2 - 0.05 - d / 2));
+                  bookInst.push({ x: pr[0], y: y0 + h / 2 + 0.02, z: pr[1], sx: dx ? w : d, sy: h, sz: dx ? d : w, c: BOOKCOL[Math.floor(Math.random() * BOOKCOL.length)], lean: Math.random() < 0.04 ? rnd(-0.25, 0.25) : 0, dx: dx });
+                  a += w + rnd(0, 0.012);
+                }
+              }
+            });
+            var col = dx ? colBox(cx, cz, len, depth) : colBox(cx, cz, depth, len);
+            var sh = { cx: cx, cz: cz, x0: col[0], z0: col[1], x1: col[2], z1: col[3], axis: axis, cats: cats, sides: sides };
+            shelves.push(sh);
+            /* signs */
+            sides.forEach(function (sd, i) {
+              var cat = cats[Math.min(i, cats.length - 1)];
+              if (dx) makeLabel(cat, 1.7, 0.42, cx, 2.55, cz + sd * (depth / 2 + 0.03), sd > 0 ? 0 : Math.PI);
+              else makeLabel(cat, 1.7, 0.42, cx + sd * (depth / 2 + 0.03), 2.55, cz, sd > 0 ? Math.PI / 2 : -Math.PI / 2);
+            });
+            return sh;
+          }
+          makeShelf(-6, -15.7, 6, "x", 0.55, [1], ["উপন্যাস"]);
+          makeShelf(0, -15.7, 6, "x", 0.55, [1], ["কবিতা"]);
+          makeShelf(6, -15.7, 6, "x", 0.55, [1], ["বিজ্ঞান"]);
+          makeShelf(9.7, -12, 5.6, "z", 0.55, [-1], ["ইতিহাস"]);
+          makeShelf(9.7, -6, 5.6, "z", 0.55, [-1], ["ভ্রমণ"]);
+          makeShelf(9.7, 0, 5.6, "z", 0.55, [-1], ["রহস্য"]);
+          makeShelf(0, -9.5, 5, "x", 0.9, [1, -1], ["গল্প সংকলন", "মাঙ্গা ও কমিক্স"]);
+          makeShelf(-9.7, 5.9, 3.0, "z", 0.55, [1], ["আমার বই"]);
+          (function () {
+            var inst = new THREE.InstancedMesh(UB, L(0xffffff), bookInst.length), mt = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s = new THREE.Vector3(), p = new THREE.Vector3(), cc = new THREE.Color();
+            bookInst.forEach(function (b, i) {
+              e.set(b.dx ? 0 : 0, 0, 0); if (b.lean) { if (b.dx) e.z = b.lean; else e.x = b.lean; } q.setFromEuler(e);
+              p.set(b.x, b.y, b.z); s.set(b.sx, b.sy, b.sz); mt.compose(p, q, s); inst.setMatrixAt(i, mt); inst.setColorAt(i, cc.setHex(b.c));
+            });
+            inst.frustumCulled = false; inst.instanceMatrix.needsUpdate = true; if (inst.instanceColor) inst.instanceColor.needsUpdate = true; scene.add(inst);
+          })();
+
+          /* ---------- tables, seats, benches ---------- */
+          var seats = [];
+          function chair(x, z, yaw, mat) {
+            var g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = yaw; scene.add(g);
+            bx(0.46, 0.05, 0.46, mat, 0, 0.45, 0, g); bx(0.46, 0.5, 0.05, mat, 0, 0.72, 0.21, g); bx(0.38, 0.42, 0.38, M.dark, 0, 0.21, 0, g);
+          }
+          [[-3.6, 1.5], [3.6, 1.5], [-3.6, -5], [3.6, -5]].forEach(function (t) {
+            var cx = t[0], cz = t[1];
+            bx(1.1, 0.07, 2.8, M.woodL, cx, 0.78, cz); bx(0.9, 0.7, 2.6, M.wood, cx, 0.38, cz); colBox(cx, cz, 1.2, 2.9);
+            bx(0.5, 0.02, 0.3, MC(0x7a2b2b), cx + 0.1, 0.82, cz - 0.6);
+            [-1, 0, 1].forEach(function (k) {
+              chair(cx - 0.95, cz + k * 0.9, -Math.PI / 2, M.wood); chair(cx + 0.95, cz + k * 0.9, Math.PI / 2, M.wood);
+              seats.push({ x: cx - 0.95, z: cz + k * 0.9, yaw: -Math.PI / 2, win: false, kind: "টেবিলে", route: [[cx - 1.9, 4.6], [cx - 1.9, cz + k * 0.9]], npc: null });
+              seats.push({ x: cx + 0.95, z: cz + k * 0.9, yaw: Math.PI / 2, win: false, kind: "টেবিলে", route: [[cx + 1.9, 4.6], [cx + 1.9, cz + k * 0.9]], npc: null });
+            });
+          });
+          WZ.slice(0, 4).forEach(function (z) {
+            bx(0.55, 0.08, 2.0, M.woodL, -9.65, 0.45, z); bx(0.5, 0.4, 1.9, M.wood, -9.65, 0.2, z); bx(0.45, 0.1, 1.5, MC(0x5a2f3a), -9.65, 0.54, z);
+            addCol(-9.95, z - 1.0, -9.35, z + 1.0);
+            [-0.5, 0.5].forEach(function (o) { seats.push({ x: -9.6, z: z + o, yaw: Math.PI / 2, win: true, kind: "জানালার ধারে", route: [[-7.6, 6.2], [-7.6, z + o]], npc: null }); });
+          });
+          /* lobby: counter, owner desk, panel, door, rug */
+          bx(3.4, 1.0, 0.55, M.wood, -6.5, 0.5, 10.9); bx(3.5, 0.06, 0.65, M.woodL, -6.5, 1.03, 10.9); colBox(-6.5, 10.9, 3.5, 0.65);
+          makeLabel("টিকিট ঘর — ৫ টাকা", 2.4, 0.6, -6.5, 2.3, 9.9, 0);
+          bx(2.2, 0.01, 6, MC(0x6f2630), 0, 0.01, 12);
+          bx(1.7, 0.78, 0.7, M.wood, 7.6, 0.39, 6.5); bx(1.8, 0.05, 0.8, M.woodL, 7.6, 0.8, 6.5); colBox(7.6, 6.5, 1.8, 0.8);
+          var panelMat = L(0x3a3a3a); bx(0.5, 0.7, 0.12, panelMat, 9.9, 1.5, 5.3); var swKnob = bx(0.08, 0.2, 0.1, B(0xff5a3a), 9.82, 1.5, 5.3);
+          makeLabel("মালিক", 1.0, 0.25, 7.6, 1.7, 6.9, 0);
+
+          /* ---------- people ---------- */
+          var persons = [];
+          var SHIRTS = [0x8a3a3a, 0x3a5a8a, 0x4a6a3a, 0x8a7a3a, 0x6a4a7a, 0x2f2f35, 0xb0b0a0, 0x7a4a2a, 0x3a7a7a];
+          var PANTS = [0x23262e, 0x3a3326, 0x2a3a4a, 0x40403a];
+          var HAIR = [0x16100c, 0x2a1d14, 0x3a2a1e, 0x8a8a88, 0x0c0c0c];
+          function limb(w, h, d, mat, x, y, z, par) { var g = new THREE.Group(); g.position.set(x, y, z); par.add(g); bx(w, h, d, mat, 0, -h / 2, 0, g); return g; }
+          var newsMat = L(0xffffff, { map: ctex(128, 160, function (x) { x.fillStyle = "#d8d4c4"; x.fillRect(0, 0, 128, 160); x.fillStyle = "#222"; x.fillRect(8, 8, 112, 18); for (var i = 0; i < 11; i++) { x.fillStyle = "rgba(30,30,30,.55)"; x.fillRect(8, 36 + i * 11, i % 3 === 0 ? 112 : 54, 4); if (i % 3 !== 0) x.fillRect(66, 36 + i * 11, 54, 4); } x.fillStyle = "#888"; x.fillRect(8, 60, 50, 34); }) });
+          var magMats = [0xb03a48, 0x2f6b8a, 0x6a8a3a].map(function (c) { return L(0xffffff, { map: ctex(96, 128, function (x) { x.fillStyle = "#" + ("000000" + c.toString(16)).slice(-6); x.fillRect(0, 0, 96, 128); x.fillStyle = "#f4e8c0"; x.fillRect(8, 8, 80, 14); x.fillStyle = "rgba(255,255,255,.7)"; x.fillRect(14, 40, 68, 50); }) }); });
+          function mkPerson(o) {
+            o = o || {}; var g = new THREE.Group(), sc = rnd(0.95, 1.05); g.scale.setScalar(sc); scene.add(g);
+            var sh = MC(o.shirt || pick(SHIRTS)), pt = MC(pick(PANTS)), sk = pick(M.skin), hr = MC(pick(HAIR));
+            var up = new THREE.Group(); g.add(up);
+            bx(0.44, 0.6, 0.25, sh, 0, 1.15, 0, up);
+            var head = new THREE.Group(); head.position.set(0, 1.62, 0); up.add(head);
+            head.add(new THREE.Mesh(new THREE.SphereGeometry(0.125, 10, 8), sk));
+            var hair = new THREE.Mesh(new THREE.SphereGeometry(0.135, 10, 8), hr); hair.scale.set(1, 0.78, 0.95); hair.position.set(0, 0.05, 0.032); head.add(hair);
+            var eyeM = MC(0x15100c);
+            [-1, 1].forEach(function (s) { var e = new THREE.Mesh(new THREE.SphereGeometry(0.014, 6, 5), eyeM); e.position.set(s * 0.045, 0.015, -0.118); head.add(e); bx(0.05, 0.008, 0.01, hr, s * 0.045, 0.05, -0.116, head); });
+            var nose = new THREE.Mesh(new THREE.SphereGeometry(0.016, 6, 5), sk); nose.position.set(0, -0.012, -0.127); head.add(nose);
+            bx(0.045, 0.007, 0.008, MC(0x6a2f2a), 0, -0.055, -0.114, head);
+            var aL = limb(0.12, 0.56, 0.12, sh, -0.28, 1.42, 0, up), aR = limb(0.12, 0.56, 0.12, sh, 0.28, 1.42, 0, up);
+            [aL, aR].forEach(function (a) { var h = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), sk); h.position.y = -0.58; a.add(h); });
+            var kind = o.prop != null ? o.prop : Math.floor(Math.random() * 3), prop;
+            if (kind === 1) { prop = new THREE.Mesh(UB, newsMat); prop.scale.set(0.46, 0.012, 0.56); }
+            else if (kind === 2) { prop = new THREE.Mesh(UB, pick(magMats)); prop.scale.set(0.24, 0.012, 0.32); }
+            else { prop = new THREE.Mesh(UB, MC(pick(BOOKCOL))); prop.scale.set(0.24, 0.04, 0.32); }
+            prop.position.set(0, 1.24, -0.5); prop.rotation.x = 0.9; prop.visible = false; up.add(prop);
+            var legs = new THREE.Group(); g.add(legs);
+            var lL = limb(0.16, 0.86, 0.17, pt, -0.1, 0.86, 0, legs), lR = limb(0.16, 0.86, 0.17, pt, 0.1, 0.86, 0, legs);
+            var sl = new THREE.Group(); g.add(sl); sl.visible = false;
+            bx(0.16, 0.15, 0.46, pt, -0.1, 0.52, -0.2, sl); bx(0.16, 0.15, 0.46, pt, 0.1, 0.52, -0.2, sl);
+            bx(0.15, 0.5, 0.15, pt, -0.1, 0.26, -0.42, sl); bx(0.15, 0.5, 0.15, pt, 0.1, 0.26, -0.42, sl);
+            var p = { g: g, up: up, head: head, aL: aL, aR: aR, lL: lL, lR: lR, legs: legs, sl: sl, prop: prop, st: "stand", path: [], speed: rnd(0.95, 1.2), t: rnd(0, 9), seat: null, done: null, yaw: 0, r: 0.3, gone: false, leaveAt: 0, nextFlip: rnd(4, 12), lookT: 0 };
+            persons.push(p); return p;
+          }
+          function place(p, x, z, yaw) { p.g.position.set(x, 0, z); p.g.rotation.y = yaw || 0; p.yaw = yaw || 0; }
+          function poseSeat(p, s) {
+            p.st = "seat"; p.seat = s; place(p, s.x, s.z, s.yaw); p.legs.visible = false; p.sl.visible = true; p.up.position.y = -0.34; p.up.position.z = 0;
+            p.prop.position.set(0, 1.24, -0.5); p.prop.rotation.x = 0.9; p.prop.visible = true; p.aL.rotation.set(1.2, 0, 0.28); p.aR.rotation.set(1.2, 0, -0.28); p.leaveAt = rnd(70, 190); p.nextFlip = rnd(4, 12);
+          }
+          function poseStand(p) { p.st = "stand"; p.legs.visible = true; p.sl.visible = false; p.up.position.y = 0; p.prop.visible = false; p.aL.rotation.set(0, 0, 0); p.aR.rotation.set(0, 0, 0); p.head.rotation.set(0, 0, 0); }
+          function walkTo(p, pts, done) { if (p.st === "seat") { poseStand(p); } p.st = "walk"; p.path = pts.map(function (a) { return a.slice(); }); p.done = done || null; }
+
+          var owner = mkPerson({ shirt: 0x2f5a3a }), clerk = mkPerson({ shirt: 0x5a2f3a });
+          place(owner, 7.6, 5.6, Math.PI); place(clerk, -6.5, 10.1, Math.PI);
+          var OWNER_HOME = [7.6, 5.55];
+          var binder = mkPerson({ shirt: 0x6a4a2a, prop: 0 }); place(binder, -7, -12.55, Math.PI); binder.prop.visible = false;
+          bx(2.4, 0.9, 0.9, M.wood, -7, 0.45, -11.5); bx(2.5, 0.06, 1.0, M.woodL, -7, 0.93, -11.5); colBox(-7, -11.5, 2.5, 1.0);
+          bx(0.5, 0.22, 0.36, M.paper, -7.7, 1.07, -11.5); bx(0.4, 0.14, 0.3, M.paper, -6.3, 1.03, -11.4); bx(0.45, 0.3, 0.45, M.brass, -7.0, 1.1, -11.45);
+          makeLabel("মাঙ্গা বাঁধাই ঘর", 1.8, 0.45, -7, 1.55, -11.1, 0);
+          var queue = [], QX = -6.5, QZ = 11.95;
+          function qSlot(i) { return [QX, QZ + i * 0.85]; }
+          function spawnQueuer(i) { var p = mkPerson(); var s = qSlot(i); place(p, s[0], s[1], 0); p.queued = true; queue.push(p); return p; }
+          spawnQueuer(0); spawnQueuer(1);
+          function seatFree(s) { return !s.npc && !s.pl; }
+          function freeSeats() { return seats.filter(seatFree); }
+          /* initial readers */
+          seats.forEach(function (s) { if (Math.random() < 0.5) { var p = mkPerson(); poseSeat(p, s); s.npc = p; } });
+          (function () {
+            var fw = seats.filter(function (s) { return s.win && s.npc; }); while (fw.length > 5) { var s = fw.pop(); s.npc.gone = true; s.npc.g.visible = false; s.npc = null; }
+            var ft = seats.filter(function (s) { return !s.win && s.npc; }); while (ft.length > 13) { var s2 = ft.pop(); s2.npc.gone = true; s2.npc.g.visible = false; s2.npc = null; }
+          })();
+          /* browsers at shelves */
+          [[-6, -14.55, 0], [3, -14.55, 0], [8.65, -6, Math.PI / 2 * -1], [-1.5, -8.2, Math.PI]].forEach(function (b) {
+            var p = mkPerson({ prop: 0 }); place(p, b[0], b[1], b[2]); p.browse = true; p.aL.rotation.set(0.9, 0, 0.25); p.aR.rotation.set(0.9, 0, -0.25); p.prop.position.set(0, 1.1, -0.42); p.prop.rotation.x = 0.9; p.prop.visible = true; p.head.rotation.x = -0.25; colBox(b[0], b[1], 0.55, 0.55);
+          });
+          function recycle() { persons = persons.filter(function (p) { if (p.gone) { scene.remove(p.g); return false; } return true; }); }
+
+          /* ---------- reading light & environment ---------- */
+          var G = { hour: 0, state: "idle", started: false, ticket: false, money: 500, pages: 0, t0: 0, seated: null, shed: { on: false, t: 0, dur: 0, next: 140 }, sw: true, lamp: 1, flick: 0, owner: { mode: "home", t: 0 }, queueTimer: 8, arrive: 18, leaveCheck: 20, tick: 0, torch: false };
+          var P = { x: 0, z: 14.8, y: 1.62, yaw: 0, pitch: 0 };
+          var C = {};
+          ["topN:0x040816", "topD:0x3f86d6", "horN:0x0b1330", "horD:0xa8cfee", "glow:0xff7a2e", "dusk:0x5b4a8a", "tmp:0xffffff", "tmp2:0xffffff", "warm:0xffeccc", "cool:0xb4c6ff"].forEach(function (s) { var a = s.split(":"); C[a[0]] = new THREE.Color(+a[1]); });
+          var ENV = { day: 1, sunEl: 0, sunT: 0, moonEl: 0, moonT: 0, moon: 0, glow: 0 };
+          var RISE = 6.2, SET = 17.4;
+          function envCalc(h) {
+            var d = sm((h - RISE + 0.6) / 1.4) * sm((SET + 0.6 - h) / 1.4); ENV.day = d;
+            var st = (h - RISE) / (SET - RISE); ENV.sunT = clamp(st, 0, 1); ENV.sunEl = st > 0 && st < 1 ? Math.sin(Math.PI * st) : 0;
+            var nl = 24 - (SET - RISE), mt = (((h - SET) % 24) + 24) % 24 / nl; ENV.moonT = clamp(mt, 0, 1); ENV.moonEl = mt < 1 ? Math.sin(Math.PI * mt) : 0;
+            ENV.moon = (1 - d) * clamp(0.28 + ENV.moonEl * 1.4, 0, 1);
+            ENV.glow = clamp(4 * d * (1 - d) * 1.1 + d * clamp(1 - ENV.sunEl * 2.6, 0, 1) * 0.5, 0, 1);
+          }
+          function bodyPos(t, el, out) { out.set(-0.85, 0.04 + 0.6 * el, 0.9 * Math.cos(Math.PI * t)).normalize().multiplyScalar(270); return out; }
+          var vSun = new THREE.Vector3(), vMoon = new THREE.Vector3();
+          function applyEnv() {
+            var d = ENV.day, lamp = G.lamp * (G.flick > 0 ? (Math.random() < 0.5 ? 0.2 : 1) : 1);
+            C.tmp.copy(C.horN).lerp(C.horD, d).lerp(C.glow, ENV.glow * 0.7);
+            skyMat.uniforms.hor.value.copy(C.tmp);
+            C.tmp2.copy(C.topN).lerp(C.topD, d).lerp(C.dusk, ENV.glow * 0.3); skyMat.uniforms.top.value.copy(C.tmp2);
+            scene.fog.color.copy(C.tmp); renderer.setClearColor(C.tmp);
+            stars.material.opacity = Math.pow(1 - d, 2) * 0.9;
+            bodyPos(ENV.sunT, ENV.sunEl, vSun); bodyPos(ENV.moonT, ENV.moonEl, vMoon);
+            sunSp.position.copy(vSun).add(camera.position); sunSp.material.opacity = clamp(d * 1.6, 0, 1) * (ENV.sunEl > 0.01 ? 1 : 0); sunSp.material.color.setRGB(1, 1 - ENV.glow * 0.25, 1 - ENV.glow * 0.5);
+            moonSp.position.copy(vMoon).add(camera.position); moonSp.material.opacity = clamp((1 - d) * 1.5, 0, 1) * (ENV.moonEl > 0.005 ? 1 : 0);
+            sky.position.copy(camera.position); stars.position.copy(camera.position);
+            amb.intensity = 0.1 + 0.3 * d + 0.42 * lamp; amb.color.copy(C.cool).lerp(C.warm, clamp(Math.max(d * 0.7, lamp), 0, 1));
+            hemi.intensity = 0.12 + 0.26 * d + 0.14 * lamp; hemi.color.copy(C.tmp);
+            if (d > 0.08) { dirL.position.copy(vSun); dirL.intensity = 0.65 * d; dirL.color.setRGB(1, 0.95 - ENV.glow * 0.2, 0.85 - ENV.glow * 0.4); }
+            else { dirL.position.copy(vMoon); dirL.intensity = 0.34 * ENV.moon; dirL.color.setHex(0x8fa7ff); }
+            lampMat.color.setRGB(lerp(0.16, 1, lamp), lerp(0.12, 0.88, lamp), lerp(0.08, 0.62, lamp));
+            var ev = 0.1 + 0.9 * d;
+            extMats.forEach(function (e) { e.m.color.copy(e.base).multiplyScalar(ev); if (ENV.glow > 0.1) e.m.color.r += ENV.glow * 0.08 * ev; });
+            var shaftOp = d * 0.2 * clamp(ENV.sunEl * 2.2, 0, 1) + ENV.moon * 0.16;
+            shafts.forEach(function (m) { m.material.opacity = shaftOp; m.material.color.copy(d > 0.2 ? C.warm : C.cool); });
+            torch.intensity = G.torch ? 1.1 : 0;
+          }
+          function nearWindow() {
+            if (G.seated) return !!G.seated.win;
+            for (var i = 0; i < WZ.length; i++) if (P.x < -8 && Math.abs(P.z - WZ[i]) < 1.4) return true;
+            return false;
+          }
+          function readLevel() {
+            var nw = nearWindow(), l = G.lamp * 0.82 + ENV.day * (nw ? 0.95 : 0.4) + ENV.moon * (nw ? 0.42 : 0.03) + (G.torch ? 0.42 : 0);
+            return clamp(l, 0, 1);
+          }
+
+          /* ---------- book view (first person) ---------- */
+          var PXW = 600, PXH = 840, PW = 0.3, PH = 0.42;
+          var BK = { ready: false, book: null, mode: "none", ho: 0, page: 0, single: false, flipping: false, t: 0, dir: 1, np: 0, cache: {} };
+          (function buildBook() {
+            function mk() { var c = document.createElement("canvas"); c.width = PXW; c.height = PXH; var t = new THREE.CanvasTexture(c); t.anisotropy = 4; return { c: c, t: t }; }
+            BK.L = mk(); BK.R = mk(); BK.F = mk(); BK.Bk = mk();
+            BK.root = new THREE.Group(); camera.add(BK.root); BK.root.visible = false;
+            BK.matP = B(0xffffff); BK.pages = new THREE.Group(); BK.root.add(BK.pages);
+            function pl(tex) { var m = new THREE.Mesh(new THREE.PlaneGeometry(PW, PH), new THREE.MeshBasicMaterial({ map: tex.t })); return m; }
+            BK.pL = pl(BK.L); BK.pL.position.x = -PW / 2; BK.pR = pl(BK.R); BK.pR.position.x = PW / 2;
+            BK.pages.add(BK.pL); BK.pages.add(BK.pR);
+            BK.coverBase = new THREE.Mesh(UB, MC(0x5a2f22)); BK.coverBase.scale.set(PW * 2 + 0.03, PH + 0.03, 0.012); BK.coverBase.position.z = -0.009; BK.pages.add(BK.coverBase);
+            BK.cbMat = BK.coverBase.material = new THREE.MeshBasicMaterial({ color: 0x5a2f22 });
+            BK.leaf = new THREE.Group(); BK.pages.add(BK.leaf); BK.leaf.visible = false;
+            var f = pl(BK.F); f.position.x = PW / 2; f.position.z = 0.002; BK.leaf.add(f);
+            var bk = pl(BK.Bk); bk.position.x = PW / 2; bk.position.z = -0.002; bk.rotation.y = Math.PI; BK.leaf.add(bk);
+            BK.fm = f.material; BK.bm = bk.material;
+            /* closed book */
+            BK.closed = new THREE.Group(); BK.root.add(BK.closed);
+            BK.cvTex = { c: document.createElement("canvas") }; BK.cvTex.c.width = 300; BK.cvTex.c.height = 420; BK.cvTex.t = new THREE.CanvasTexture(BK.cvTex.c);
+            BK.cvMat = new THREE.MeshBasicMaterial({ map: BK.cvTex.t });
+            var cb = new THREE.Mesh(new THREE.PlaneGeometry(PW, PH), BK.cvMat); cb.position.z = 0.03; BK.closed.add(cb);
+            BK.blkMat = new THREE.MeshBasicMaterial({ color: 0xece0c0 }); var blk = new THREE.Mesh(UB, BK.blkMat); blk.scale.set(PW - 0.01, PH - 0.01, 0.05); blk.position.z = 0.0; BK.closed.add(blk);
+            BK.sideMat = new THREE.MeshBasicMaterial({ color: 0x5a2f22 }); var sd = new THREE.Mesh(UB, BK.sideMat); sd.scale.set(PW + 0.01, PH + 0.01, 0.012); sd.position.z = -0.03; BK.closed.add(sd);
+            /* hands */
+            BK.hands = new THREE.Group(); BK.root.add(BK.hands);
+            var skin = B(0xd9a273); BK.skinMat = skin;
+            [-1, 1].forEach(function (s) { var h = new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 8), skin); h.scale.set(1.3, 1, 0.7); h.position.set(s * (PW + 0.02), -PH / 2 + 0.03, 0.015); BK.hands.add(h);
+              var arm = new THREE.Mesh(UB, B(0x3a3a46)); arm.scale.set(0.07, 0.4, 0.05); arm.position.set(s * (PW + 0.05), -PH / 2 - 0.16, 0.01); arm.rotation.z = s * 0.2; BK.hands.add(arm); BK.hands.userData = {}; });
+            BK.ready = true;
+          })();
+          function wrapText(c, text, maxW) {
+            var words = text.split(" "), lines = [], cur = "";
+            words.forEach(function (w) { var t = cur ? cur + " " + w : w; if (c.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t; });
+            if (cur) lines.push(cur); return lines;
+          }
+          var FONT = "'Hind Siliguri','Noto Sans Bengali',sans-serif", DISP = "'Tiro Bangla','Hind Siliguri',serif";
+          function drawSample(c, book, idx) {
+            var g = c.getContext("2d"); var gr = g.createLinearGradient(0, 0, PXW, 0); var left = idx % 2 === 0;
+            gr.addColorStop(0, left ? "#e8dbb6" : "#f1e6c6"); gr.addColorStop(1, left ? "#f1e6c6" : "#e6d8b0"); g.fillStyle = gr; g.fillRect(0, 0, PXW, PXH);
+            g.fillStyle = "#3a2c1c"; g.textBaseline = "alphabetic";
+            g.font = "22px " + FONT; g.globalAlpha = 0.6; g.fillText(book.t, 48, 58); g.globalAlpha = 1; g.fillRect(48, 70, PXW - 96, 1);
+            g.font = "30px " + FONT; var y = 122, h = hash(book.t) + idx * 7, n = 0;
+            while (y < PXH - 90) {
+              var para = PARA[(h + n * 3) % PARA.length]; n++;
+              var lines = wrapText(g, para, PXW - 96);
+              for (var i = 0; i < lines.length && y < PXH - 90; i++) { g.fillText(lines[i], 48 + (i === 0 ? 28 : 0), y); y += 46; }
+              y += 14;
+            }
+            g.font = "20px " + FONT; g.globalAlpha = 0.55; g.textAlign = "center"; g.fillText(bn(idx + 1) + "  ·  নমুনা লেখা", PXW / 2, PXH - 34); g.textAlign = "left"; g.globalAlpha = 1;
+          }
+          function drawBlank(c, msg) { var g = c.getContext("2d"); g.fillStyle = "#ece0c0"; g.fillRect(0, 0, PXW, PXH); if (msg) { g.fillStyle = "#6a5a40"; g.font = "28px " + FONT; g.textAlign = "center"; g.fillText(msg, PXW / 2, PXH / 2); g.textAlign = "left"; } }
+          var openDocs = [];
+          function docFor(part, cb) {
+            if (part.doc) { cb(part.doc); return; }
+            var fr = new FileReader();
+            fr.onload = function () {
+              window.pdfjsLib.getDocument({ data: new Uint8Array(fr.result) }).promise.then(function (d) {
+                part.doc = d; openDocs.push(part); if (openDocs.length > 4) { var o = openDocs.shift(); try { o.doc.destroy(); } catch (e) {} o.doc = null; } cb(d);
+              }).catch(function () { cb(null); });
+            };
+            fr.readAsArrayBuffer(part.file);
+          }
+          function srcPage(book, idx, cb) {
+            if (book.parts) {
+              var pt = null; for (var i = 0; i < book.parts.length; i++) if (idx >= book.parts[i].start && idx < book.parts[i].start + book.parts[i].n) { pt = book.parts[i]; break; }
+              if (!pt) { cb(null); return; }
+              docFor(pt, function (d) { if (!d) { cb(null); return; } d.getPage(idx - pt.start + 1).then(cb, function () { cb(null); }); });
+            } else book.pdf.getPage(idx + 1).then(cb, function () { cb(null); });
+          }
+          function pdfPage(book, idx, cb) {
+            var ch = book.cache || (book.cache = {}); if (ch[idx]) { cb(ch[idx]); return; }
+            srcPage(book, idx, function (pg) {
+              if (!pg) { cb(null); return; }
+              var vp = pg.getViewport({ scale: 1 }), s = Math.min(PXW / vp.width, PXH / vp.height), v = pg.getViewport({ scale: s });
+              var c = document.createElement("canvas"); c.width = PXW; c.height = PXH; var g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, PXW, PXH);
+              var tc = document.createElement("canvas"); tc.width = Math.floor(v.width); tc.height = Math.floor(v.height);
+              pg.render({ canvasContext: tc.getContext("2d"), viewport: v }).promise.then(function () {
+                g.drawImage(tc, (PXW - tc.width) / 2, (PXH - tc.height) / 2); var keys = Object.keys(ch); if (keys.length > 14) delete ch[keys[0]]; ch[idx] = c; cb(c);
+              }).catch(function () { cb(null); });
+            });
+          }
+          function drawPage(slot, book, idx) {
+            var c = slot.c; slot.want = idx + ":" + book.t;
+            if (idx < 0 || idx >= book.pages) { drawBlank(c, ""); slot.t.needsUpdate = true; return; }
+            if (book.pdf || book.parts) {
+              if (book.cache && book.cache[idx]) { c.getContext("2d").drawImage(book.cache[idx], 0, 0); slot.t.needsUpdate = true; return; }
+              drawBlank(c, "পাতা লোড হচ্ছে…"); slot.t.needsUpdate = true;
+              pdfPage(book, idx, function (pc) { if (slot.want !== idx + ":" + book.t) return; if (pc) c.getContext("2d").drawImage(pc, 0, 0); else drawBlank(c, "পাতাটি দেখানো গেল না"); slot.t.needsUpdate = true; });
+            } else { drawSample(c, book, idx); slot.t.needsUpdate = true; }
+          }
+          function drawCover(book) {
+            var c = BK.cvTex.c, g = c.getContext("2d"), col = "#" + ("000000" + book.color.toString(16)).slice(-6);
+            if (book.cover) { g.drawImage(book.cover, 0, 0, 300, 420); }
+            else {
+              g.fillStyle = col; g.fillRect(0, 0, 300, 420); g.strokeStyle = "rgba(240,215,150,.7)"; g.lineWidth = 3; g.strokeRect(14, 14, 272, 392);
+              g.fillStyle = "#f2e2b4"; g.textAlign = "center"; g.font = "36px " + DISP; var ls = wrapText(g, book.t, 240), y = 150 - (ls.length - 1) * 24;
+              ls.forEach(function (l, i) { g.fillText(l, 150, y + i * 48); });
+              g.font = "20px " + FONT; g.globalAlpha = 0.8; g.fillText(book.a, 150, 372); g.globalAlpha = 1; g.textAlign = "left";
+            }
+            BK.cvTex.t.needsUpdate = true; BK.cbMat.color.setHex(book.color); BK.sideMat.color.setHex(book.color);
+          }
+          function holdBook(b) {
+            BK.book = b; BK.page = 0; BK.mode = "closed"; BK.ho = 0; BK.root.visible = true; drawCover(b); drawSpread();
+            BK.closed.visible = true; BK.pages.visible = false; BK.hands.visible = false;
+          }
+          function rightIdx(i) { return BK.single ? i : i + 1; }
+          function drawSpread() {
+            var b = BK.book; if (!b) return;
+            if (BK.single) { BK.pL.visible = false; drawPage(BK.R, b, BK.page); }
+            else { BK.pL.visible = true; drawPage(BK.L, b, BK.page); drawPage(BK.R, b, BK.page + 1); }
+          }
+          function flip(dir) {
+            var b = BK.book; if (!b || BK.mode !== "open" || BK.flipping) return;
+            var step = BK.single ? 1 : 2, np = BK.page + dir * step; if (np < 0 || np >= b.pages) return;
+            BK.flipping = true; BK.t = 0; BK.dir = dir; BK.np = np; BK.leaf.visible = true;
+            if (dir > 0) { drawPage(BK.F, b, rightIdx(BK.page)); if (!BK.single) drawPage(BK.Bk, b, np); drawPage(BK.R, b, rightIdx(np)); }
+            else { drawPage(BK.F, b, rightIdx(np)); if (!BK.single) { drawPage(BK.Bk, b, BK.page); drawPage(BK.L, b, np); } }
+            sfx.page(); G.pages++; updHud(); noiseCheck();
+          }
+          function layoutBook() {
+            BK.single = camera.aspect < 0.95; var t = Math.tan(camera.fov * Math.PI / 360);
+            var needW = (BK.single ? PW : PW * 2) + 0.05, needH = PH + 0.06;
+            BK.dOpen = Math.max(needW / (2 * t * camera.aspect * 0.97), needH / (2 * t * 0.84));
+            BK.pages.position.x = BK.single ? -PW / 2 : 0; BK.pL.visible = !BK.single; BK.coverBase.scale.x = (BK.single ? PW : PW * 2) + 0.03; BK.coverBase.position.x = BK.single ? PW / 2 : 0;
+            BK.hands.children.forEach(function (h, i) { var s = i % 2 === 0 ? -1 : 1; h.visible = true; });
+            if (BK.book) { var p = BK.page; if (!BK.single) p = p & ~1; BK.page = p; if (BK.mode === "open") drawSpread(); }
+          }
+          function updateBook(dt) {
+            if (!BK.book) return;
+            var open = BK.mode === "open", tgt = open ? 1 : 0; BK.ho += (tgt - BK.ho) * Math.min(1, dt * 6); if (Math.abs(BK.ho - tgt) < 0.003) BK.ho = tgt;
+            var h = BK.ho, e = sm(h), L = readLevel();
+            var cx = lerp(0.24, 0, e), cy = lerp(-0.34, -0.015, e), cz = lerp(-0.6, -(BK.dOpen || 0.5), e);
+            BK.root.position.set(cx, cy, cz); BK.root.rotation.set(lerp(0.35, -0.04, e), lerp(-0.45, 0, e), lerp(0.12, 0, e));
+            var showOpen = h > 0.5; BK.closed.visible = !showOpen; BK.pages.visible = showOpen; BK.hands.visible = showOpen && !BK.single;
+            if (G.state === "walk" && BK.mode === "closed") BK.root.position.y += Math.sin(G.tick * 7) * 0.004 * (moveMag > 0.1 ? 1 : 0);
+            var c = 0.07 + 0.93 * L, bl = ENV.moon > 0.1 && G.lamp < 0.3 && ENV.day < 0.3 ? 1.12 : 1;
+            var cr = c * (0.96 + (bl < 1.1 ? 0.04 : 0)), cb2 = c * (bl > 1.1 ? 1.1 : 0.94);
+            [BK.pL.material, BK.pR.material, BK.fm, BK.bm].forEach(function (m) { m.color.setRGB(cr, c * 0.97, cb2); });
+            BK.cvMat.color.setScalar(c); BK.blkMat.color.setRGB(0.93 * c, 0.88 * c, 0.75 * c); BK.cbMat.color.multiplyScalar(0);
+            BK.cbMat.color.setHex(BK.book.color).multiplyScalar(c); BK.sideMat.color.setHex(BK.book.color).multiplyScalar(c); BK.skinMat.color.setHex(0xd9a273).multiplyScalar(0.15 + 0.85 * L);
+            if (BK.flipping) {
+              BK.t += dt / 0.55; var u = sm(Math.min(BK.t, 1)), th = BK.dir > 0 ? u * Math.PI : (1 - u) * Math.PI;
+              BK.leaf.rotation.y = -th; BK.leaf.position.z = Math.sin(th) * 0.02;
+              var sh = 1 - 0.35 * Math.sin(th); BK.fm.color.multiplyScalar(sh); BK.bm.color.multiplyScalar(sh);
+              if (BK.t >= 1) {
+                BK.flipping = false; BK.leaf.visible = false; BK.page = BK.np;
+                if (BK.dir > 0) { if (!BK.single) drawPage(BK.L, BK.book, BK.page); } else { drawPage(BK.R, BK.book, rightIdx(BK.page)); }
+              }
+            }
+          }
+
+          /* ---------- audio ---------- */
+          var AC = null, master, nbuf, crick;
+          function audioInit() {
+            if (AC) { if (AC.state === "suspended") AC.resume(); return; }
+            try {
+              AC = new (window.AudioContext || window.webkitAudioContext)(); master = AC.createGain(); master.gain.value = CFG.vol / 100; master.connect(AC.destination);
+              nbuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate); var d = nbuf.getChannelData(0); for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+              var o = AC.createOscillator(), og = AC.createGain(), lfo = AC.createOscillator(), lg = AC.createGain(); o.frequency.value = 4300; og.gain.value = 0; lfo.type = "square"; lfo.frequency.value = 13; lg.gain.value = 0.5;
+              var shaper = AC.createGain(); shaper.gain.value = 0; lfo.connect(lg); lg.connect(shaper.gain); o.connect(shaper); shaper.connect(og); og.connect(master); o.start(); lfo.start(); crick = og;
+            } catch (e) { AC = null; }
+          }
+          function noiseBurst(type, f, q, vol, dur, att, sweep) {
+            if (!AC) return; var s = AC.createBufferSource(); s.buffer = nbuf; s.loop = true; var fl = AC.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q;
+            var g = AC.createGain(), t = AC.currentTime; g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + att); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+            if (sweep) fl.frequency.linearRampToValueAtTime(f * sweep, t + dur);
+            s.connect(fl); fl.connect(g); g.connect(master); s.start(t, Math.random()); s.stop(t + dur + 0.05);
+          }
+          var sfx = {
+            page: function () { if (CFG.rustle) noiseBurst("bandpass", 2200, 0.8, 0.22, 0.28, 0.03, 0.6); },
+            step: function () { if (CFG.steps) noiseBurst("lowpass", 240, 1, 0.3, 0.1, 0.01); },
+            click: function () { if (!AC) return; var o = AC.createOscillator(), g = AC.createGain(), t = AC.currentTime; o.type = "square"; o.frequency.value = 180; g.gain.setValueAtTime(0.15, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09); o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.1); },
+            coin: function () { if (!AC) return; var t = AC.currentTime; [880, 1320].forEach(function (f, i) { var o = AC.createOscillator(), g = AC.createGain(); o.frequency.value = f; g.gain.setValueAtTime(0.0001, t + i * 0.08); g.gain.linearRampToValueAtTime(0.12, t + i * 0.08 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.08 + 0.25); o.connect(g); g.connect(master); o.start(t + i * 0.08); o.stop(t + i * 0.08 + 0.3); }); },
+            whisper: function (k) { if (CFG.whisper) noiseBurst("bandpass", rnd(700, 1500), 1.4, 0.05 * k, rnd(0.7, 1.6), 0.25, rnd(0.7, 1.3)); },
+            rustle: function (k) { if (CFG.rustle) noiseBurst("highpass", rnd(2500, 4200), 0.7, 0.05 * k, rnd(0.15, 0.4), 0.02); },
+            shh: function () { noiseBurst("highpass", 3400, 0.6, 0.16, 0.9, 0.1); },
+            murmur: function () { if (CFG.whisper) noiseBurst("bandpass", 650, 0.9, 0.09, 2.2, 0.5); }
+          };
+          var aud = { w: 1, r: 2, s: 0 };
+          function audioUpdate(dt) {
+            if (!AC) return; master.gain.value = CFG.vol / 100;
+            if (crick) crick.gain.value = CFG.cricket ? 0.035 * Math.pow(1 - ENV.day, 2) * (G.lamp < 0.5 || nearWindow() ? 1 : 0.35) : 0;
+            var crowd = 0; persons.forEach(function (p) { if (p.st === "seat" && !p.gone) { var d = Math.hypot(p.g.position.x - P.x, p.g.position.z - P.z); if (d < 7) crowd += 1 - d / 7; } });
+            aud.w -= dt; if (aud.w <= 0) { aud.w = rnd(1.2, 3.2) / (0.4 + crowd * 0.5); if (crowd > 0.1) sfx.whisper(Math.min(1.6, 0.4 + crowd * 0.4)); }
+            aud.r -= dt; if (aud.r <= 0) { aud.r = rnd(2, 6) / (0.5 + crowd * 0.4); if (crowd > 0.1) sfx.rustle(Math.min(1.5, 0.5 + crowd * 0.3)); }
+          }
+
+          /* ---------- input ---------- */
+          var keys = {}, joy = { x: 0, y: 0, id: null }, look = { id: null, x: 0, y: 0, moved: 0, sx: 0, sy: 0, st: 0 }, moveMag = 0;
+          window.addEventListener("keydown", function (e) { if (e.target && e.target.tagName === "INPUT") return; keys[e.key.toLowerCase()] = true; if (e.key === "e" || e.key === "Enter") doAction(); if (e.key === "ArrowRight") flip(1); if (e.key === "ArrowLeft") flip(-1); });
+          window.addEventListener("keyup", function (e) { keys[e.key.toLowerCase()] = false; });
+          var stick = $("stick"), knob = stick.firstElementChild;
+          stick.addEventListener("pointerdown", function (e) { joy.id = e.pointerId; stick.setPointerCapture(e.pointerId); joyMove(e); e.preventDefault(); });
+          stick.addEventListener("pointermove", function (e) { if (e.pointerId === joy.id) joyMove(e); });
+          function joyEnd(e) { if (e.pointerId === joy.id) { joy.id = null; joy.x = joy.y = 0; knob.style.transform = "translate(0,0)"; } }
+          stick.addEventListener("pointerup", joyEnd); stick.addEventListener("pointercancel", joyEnd);
+          function joyMove(e) {
+            var r = stick.getBoundingClientRect(), x = e.clientX - (r.left + r.width / 2), y = e.clientY - (r.top + r.height / 2), m = Math.hypot(x, y), R = r.width / 2 - 8;
+            if (m > R) { x *= R / m; y *= R / m; } joy.x = x / R; joy.y = y / R; knob.style.transform = "translate(" + x + "px," + y + "px)";
+          }
+          cv.addEventListener("pointerdown", function (e) { if (look.id !== null) return; look.id = e.pointerId; look.x = look.sx = e.clientX; look.y = look.sy = e.clientY; look.moved = 0; look.st = performance.now(); try { cv.setPointerCapture(e.pointerId); } catch (x) {} });
+          cv.addEventListener("pointermove", function (e) {
+            if (e.pointerId !== look.id) return; var dx = e.clientX - look.x, dy = e.clientY - look.y; look.x = e.clientX; look.y = e.clientY; look.moved += Math.abs(dx) + Math.abs(dy);
+            if (!G.started || BK.mode === "open" || tw) return; var s = 0.0052 * CFG.sens / 100; P.yaw -= dx * s; P.pitch = clamp(P.pitch - dy * s, -1.1, 1.1);
+            if (G.seated) P.yaw = G.seated.yaw + clamp(angDiff(G.seated.yaw, P.yaw), -1.3, 1.3);
+          });
+          function lookEnd(e) {
+            if (e.pointerId !== look.id) return; look.id = null;
+            if (G.started && BK.mode === "open") {
+              var dx = e.clientX - look.sx, dt = performance.now() - look.st;
+              if (Math.abs(dx) > 50) flip(dx < 0 ? 1 : -1); else if (look.moved < 12 && dt < 400) flip(e.clientX > window.innerWidth / 2 ? 1 : -1);
+            }
+          }
+          cv.addEventListener("pointerup", lookEnd); cv.addEventListener("pointercancel", lookEnd);
+
+          /* ---------- UI helpers ---------- */
+          var toastT = 0;
+          function toast(msg, ms) { var t = $("toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(function () { t.classList.remove("on"); }, ms || 3400); }
+          function hint(msg) { var h = $("hint"); if (msg) { if (h.textContent !== msg) h.textContent = msg; h.classList.add("on"); } else h.classList.remove("on"); }
+          function part(h) { return h < 4 ? "গভীর রাত" : h < 6 ? "ভোর" : h < 12 ? "সকাল" : h < 15.5 ? "দুপুর" : h < 17.5 ? "বিকেল" : h < 19 ? "সন্ধ্যা" : "রাত"; }
+          function fmtTime(h) { var hh = Math.floor(h), mm = Math.floor((h - hh) * 60); return bn(("0" + hh).slice(-2) + ":" + ("0" + mm).slice(-2)); }
+          function updHud() {
+            $("money").textContent = "টাকা ৳ " + bn(G.money) + " (কাল্পনিক)";
+            var tk = $("tk"); tk.hidden = !G.ticket; tk.textContent = "টিকিট ✓";
+            var rd = $("rd"); rd.hidden = G.pages === 0; rd.textContent = "উল্টানো পাতা: " + bn(G.pages);
+            var fn = $("fn"); fn.hidden = !FN.total; fn.textContent = "জরিমানা ৳" + bn(FN.total);
+          }
+          function openSheet(id, on) { $(id).classList.toggle("on", on); }
+          function syncSettings() {
+            document.querySelectorAll(".tg").forEach(function (b) { b.classList.toggle("on", !!CFG[b.dataset.k]); });
+            $("sVol").value = CFG.vol; $("sSens").value = CFG.sens; $("sSpeed").value = String(CFG.speed); $("sClock").value = Math.round(G.hour * 10);
+          }
+          document.querySelectorAll(".tg").forEach(function (b) { b.addEventListener("click", function () { var k = b.dataset.k; CFG[k] = !CFG[k]; if (k === "hq") fit(); if (k === "shed" && !CFG.shed && G.shed.on) endShed(); saveCfg(); syncSettings(); }); });
+          $("sVol").oninput = function () { CFG.vol = +this.value; saveCfg(); };
+          $("sSens").oninput = function () { CFG.sens = +this.value; saveCfg(); };
+          $("sSpeed").onchange = function () { CFG.speed = +this.value; saveCfg(); };
+          $("sClock").oninput = function () { G.hour = +this.value / 10; };
+          $("gear").onclick = function () { syncSettings(); openSheet("settings", true); };
+          $("sX").onclick = function () { openSheet("settings", false); };
+
+          /* PDF import */
+          var myBooks = allBooks["আমার বই"];
+          function addPdf(file) {
+            if (!window.pdfjsLib) { toast("পিডিএফ লাইব্রেরি লোড হয়নি"); return; }
+            var fr = new FileReader();
+            fr.onload = function () {
+              window.pdfjsLib.getDocument({ data: new Uint8Array(fr.result) }).promise.then(function (doc) {
+                var b = { t: file.name.replace(/\.pdf$/i, ""), a: "আমার সংগ্রহ", cat: "আমার বই", color: 0x4a2f5c, pages: doc.numPages, pdf: doc, cache: {} };
+                myBooks.push(b); toast("যুক্ত হলো: " + b.t + " (" + bn(b.pages) + " পাতা)");
+                pdfPage(b, 0, function (c) {
+                  if (!c) return; var cc = document.createElement("canvas"); cc.width = 300; cc.height = 420; cc.getContext("2d").drawImage(c, 0, 0, 300, 420); b.cover = cc;
+                  var px = cc.getContext("2d").getImageData(0, 0, 300, 420).data, r = 0, g = 0, bl = 0, n = 0; for (var i = 0; i < px.length; i += 400) { r += px[i]; g += px[i + 1]; bl += px[i + 2]; n++; }
+                  b.color = ((r / n * 0.6) << 16) | ((g / n * 0.6) << 8) | (bl / n * 0.6);
+                  if (BK.book === b) drawCover(b);
+                });
+              }).catch(function () { toast("এই পিডিএফ খোলা গেল না"); });
+            };
+            fr.readAsArrayBuffer(file);
+          }
+          ["pdfBtn1", "pdfBtn2", "pkAdd"].forEach(function (id) { $(id).onclick = function () { $("pdfIn").click(); }; });
+          $("pdfIn").onchange = function () { Array.prototype.forEach.call(this.files, addPdf); this.value = ""; };
+
+          /* picker */
+          function showPicker(cat) {
+            var list = allBooks[cat] || [], box = $("pkL"); box.innerHTML = ""; $("pkT").textContent = cat;
+            $("pkAdd").hidden = cat !== "আমার বই";
+            if (!list.length) { var p = document.createElement("p"); p.textContent = "এই তাকে এখনো কোনো বই নেই। নিচের বোতামে ফোনের পিডিএফ বেছে নিন।"; box.appendChild(p); }
+            list.forEach(function (b) {
+              var it = document.createElement("button"); it.className = "item"; var i = document.createElement("i"); i.style.background = "#" + ("000000" + b.color.toString(16)).slice(-6);
+              var d = document.createElement("div"), t = document.createElement("b"), a = document.createElement("span"); t.textContent = b.t; a.textContent = b.a + " · " + bn(b.pages) + " পাতা"; d.appendChild(t); d.appendChild(a); it.appendChild(i); it.appendChild(d);
+              it.onclick = function () { openSheet("picker", false); holdBook(b); toast("বই নিলেন: " + b.t); sfx.rustle(2); if (G.seated) { setOpen(true); } }; box.appendChild(it);
+            });
+            openSheet("picker", true);
+          }
+          $("pkX").onclick = function () { openSheet("picker", false); };
+
+          /* ---------- game logic ---------- */
+          var tw = null, act = null;
+          function setOpen(o) { if (!BK.book) return; if (o && !G.seated) { toast("বসে পড়ুন, দাঁড়িয়ে পড়া যায় না"); return; } BK.mode = o ? "open" : "closed"; if (o) { layoutBook(); drawSpread(); sfx.page(); } updBar(); }
+          function updBar() {
+            var bar = $("readbar"), show = !!(G.seated && BK.book && !tw); bar.style.display = show ? "flex" : "none";
+            $("bOpen").textContent = BK.mode === "open" ? "বই বন্ধ" : "বই খুলুন"; $("bPrev").disabled = $("bNext").disabled = BK.mode !== "open"; $("bTorch").classList.toggle("on", G.torch);
+          }
+          $("bOpen").onclick = function () { setOpen(BK.mode !== "open"); };
+          $("bPrev").onclick = function () { flip(-1); }; $("bNext").onclick = function () { flip(1); };
+          $("bTorch").onclick = function () { G.torch = !G.torch; sfx.click(); updBar(); };
+
+          function startTween(tx, tz, ty, tyaw, dur, done) { tw = { t: 0, d: dur, fx: P.x, fz: P.z, fy: P.y, fyaw: P.yaw, tx: tx, tz: tz, ty: ty, tyaw: tyaw, done: done }; }
+          function sit(s) {
+            s.pl = true; G.seated = s; G.state = "sitting"; startTween(s.x, s.z, 1.12, s.yaw, 0.8, function () { P.pitch = -0.12; toast(s.kind + " বসলেন" + (BK.book ? "। বই খুলে পড়ুন।" : "। আগে একটা বই বেছে আনলে ভালো হতো।")); updBar(); if (BK.book) setOpen(true); });
+            P.pitch = 0; updBar();
+          }
+          function standUp() {
+            var s = G.seated; if (!s) return; if (BK.mode === "open") BK.mode = "closed";
+            var fx = -Math.sin(s.yaw), fz = -Math.cos(s.yaw), ex = s.x - fx * 0.8, ez = s.z - fz * 0.8;
+            if (hitAt(ex, ez)) { ex = s.x - fx * 0.5; ez = s.z - fz * 0.5 + (s.win ? 0.6 : 0.0); }
+            if (s.win) { ex = s.x + 0.9; ez = s.z; }
+            startTween(ex, ez, 1.62, P.yaw, 0.7, function () { s.pl = false; G.seated = null; G.state = "walk"; updBar(); });
+            G.state = "standing"; updBar();
+          }
+          function hitAt(x, z) {
+            var r = 0.28;
+            for (var i = 0; i < colliders.length; i++) { var c = colliders[i]; if (!c[4]) continue; if (x > c[0] - r && x < c[2] + r && z > c[1] - r && z < c[3] + r) return true; }
+            for (var j = 0; j < persons.length; j++) { var p = persons[j]; if (p.gone || p.st === "seat" || p === owner && false) continue; var dx = x - p.g.position.x, dz = z - p.g.position.z; if (dx * dx + dz * dz < 0.3 * 0.3 + 0.0) return true; }
+            return false;
+          }
+          function distBox(x, z, c) { var dx = Math.max(c[0] - x, 0, x - c[2]), dz = Math.max(c[1] - z, 0, z - c[3]); return Math.hypot(dx, dz); }
+          function findAction() {
+            if (G.seated) return tw ? null : { label: "উঠুন", fn: standUp };
+            var fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw);
+            if (P.z > 15.1 && Math.abs(P.x) < 1.6) return { label: "বাইরে যান", fn: leave };
+            var d = Math.hypot(P.x - QX, P.z - QZ);
+            if (!G.ticket && d < 2.1) { return queue.length ? { label: null, hint: "লাইনে অপেক্ষা করুন, আগে " + bn(queue.length) + " জন" } : { label: "টিকিট কিনুন · ৫ টাকা", fn: buyTicket }; }
+            if (!G.ticket) { if (P.z < 8.6 && P.z > 8) return null; return null; }
+            if (LEND.wait && LEND.wait.ready && Math.hypot(P.x - 4.6, P.z - 6.8) < 2.3) return { label: (LEND.wait.kind === "return" ? "ফেরত নিন · " : "ধার দিন · ") + LEND.wait.name, fn: showLend };
+            if (Math.hypot(P.x + 7, P.z + 10.3) < 2.0) return { label: "মাঙ্গা বাঁধাই ঘর", fn: openBind };
+            var best = null, bd = 9;
+            seats.forEach(function (s) { if (!seatFree(s)) return; var dx = s.x - P.x, dz = s.z - P.z, dd = Math.hypot(dx, dz); if (dd < 1.5 && (dx * fx + dz * fz) / (dd || 1) > 0.25 && dd < bd) { bd = dd; best = { label: s.kind + " বসুন", fn: function () { sit(s); } }; } });
+            if (best) return best;
+            var sb = null, sd2 = 9;
+            shelves.forEach(function (sh) { var dd = distBox(P.x, P.z, [sh.x0, sh.z0, sh.x1, sh.z1]); if (dd < 1.25 && dd < sd2) { var cx = sh.cx - P.x, cz = sh.cz - P.z, m = Math.hypot(cx, cz) || 1; if ((cx * fx + cz * fz) / m > 0.2) { sd2 = dd; sb = sh; } } });
+            if (sb) {
+              var cat = sb.cats[0]; if (sb.sides.length > 1) cat = P.z > sb.cz ? sb.cats[0] : sb.cats[1];
+              return { label: cat + "-এর তাক", fn: function () { showPicker(cat); } };
+            }
+            return null;
+          }
+          function doAction() { if (!G.started || !act || !act.fn || document.querySelector(".sheet.on")) return; act.fn(); }
+          $("act").onclick = doAction;
+          function buyTicket() {
+            if (G.money < 5) { toast("টাকা নেই!"); return; } G.money -= 5; G.ticket = true; sfx.coin(); updHud();
+            toast("টিকিট কাটলেন। কর্মচারী: “ভেতরে যান, আস্তে হাঁটবেন।”", 4200); G.queueTimer = 6; G.arrive = 10; LEND.next = 30;
+          }
+          function leave() {
+            G.started = false; var mins = Math.max(1, Math.round((performance.now() - G.t0) / 60000)), fine = FN.total, paid = Math.min(G.money, fine);
+            G.money -= paid; FN.total = fine - paid; updHud();
+            var s = "আপনি প্রায় " + bn(mins) + " মিনিট ছিলেন এবং " + bn(G.pages) + "টি পাতা উল্টেছেন।";
+            if (fine) s += " জরিমানা ৳" + bn(fine) + " দিয়ে বেরোলেন" + (paid < fine ? " (বাকি রইল ৳" + bn(fine - paid) + ", পরেরবার কাটা যাবে)" : "") + "।";
+            if (LEND.out.length) s += " " + bn(LEND.out.length) + "টি ধার দেওয়া বই এখনো ফেরত আসেনি।";
+            s += " হাতে আছে ৳" + bn(G.money) + "। বাইরে এখন " + part(G.hour) + "।";
+            $("byeP").textContent = s; openSheet("bye", true); hint("");
+          }
+          $("again").onclick = function () {
+            openSheet("bye", false); if (G.seated) { G.seated.pl = false; G.seated = null; } BK.mode = "closed"; if (BK.book) { BK.ho = 0; }
+            G.ticket = false; gateCol[4] = true; G.pages = 0; FN.strikes = 0; FN.times = []; G.state = "walk"; P.x = 0; P.z = 14.8; P.yaw = 0; P.pitch = 0; P.y = 1.62; G.t0 = performance.now(); tw = null;
+            G.hour = realHour(); if (queue.length === 0) { spawnQueuer(0); spawnQueuer(1); } G.started = true; updHud(); updBar();
+          };
+          function realHour() { var d = new Date(); return d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600; }
+
+          /* ---------- fines for loud page turning ---------- */
+          var FN = { times: [], strikes: 0, total: 0, cool: 0 };
+          function noiseCheck() {
+            var now = performance.now(); FN.times.push(now); FN.times = FN.times.filter(function (x) { return now - x < 3200; });
+            if (FN.times.length >= 4 && now > FN.cool) {
+              FN.cool = now + 9000; FN.times = []; FN.strikes++; sfx.shh();
+              persons.forEach(function (p) { if (p.st === "seat" && !p.gone && Math.hypot(p.g.position.x - P.x, p.g.position.z - P.z) < 7) p.lookT = 2.2; });
+              if (FN.strikes <= 1) toast("সবাই ঘুরে তাকাল: “শ্শ্শ্! আস্তে পাতা ওল্টান।” এটা সতর্কতা।", 4500);
+              else { FN.total += 10; toast("মালিক এসে ভ্রু কুঁচকে বললেন: “জোরে পাতা ওল্টানো চলবে না।” জরিমানা ৳১০, বেরোনোর সময় দিতে হবে।", 5200); updHud(); }
+            }
+          }
+
+          /* ---------- lending ---------- */
+          var LEND = { wait: null, out: [], next: 60 };
+          var VNAMES = ["রফিক", "মিতা", "সোহেল", "নাজমা", "তানভীর", "শিউলি", "জামাল", "রুমা", "হাসান", "লিপি"];
+          var REV = {
+            5: ["অসাধারণ বই! এক বসাতেই শেষ করে ফেললাম।", "প্রতিটা পাতায় নতুন কিছু পেলাম, আবার পড়ব।", "ঠিক এমন একটা বইই খুঁজছিলাম, ধন্যবাদ।"],
+            4: ["বেশ ভালো লাগল, শেষ দিকটা আরেকটু জমাট হতে পারত।", "মন দিয়ে পড়েছি, সময় নষ্ট হয়নি।"],
+            3: ["মোটামুটি। আমি অন্য ধরনের বই আশা করেছিলাম।", "কিছু অংশ ভালো, কিছু অংশে ঘুম পেয়েছে।"],
+            2: ["তেমন জমেনি। যে ধরনের চেয়েছিলাম এটা সেটা নয়।", "অর্ধেক পড়ে রেখে দিয়েছি।"]
+          };
+          function spawnVisitor(kind, item) {
+            if (LEND.wait || persons.length > 70) return;
+            var p = mkPerson(); place(p, 0.8, 15.7, Math.PI); var w = { p: p, kind: kind, ready: false, name: item ? item.name : pick(VNAMES), cat: item ? item.cat : pick(Object.keys(CATS).filter(function (c) { return c !== "আমার বই"; })), item: item || null };
+            LEND.wait = w;
+            if (item) LEND.out.splice(LEND.out.indexOf(item), 1);
+            walkTo(p, [[0, 9.3], [0, 6.8], [4.6, 6.8]], function () { place(p, 4.6, 6.8, -Math.PI / 2); w.ready = true;
+              toast(kind === "return" ? w.name + " বই ফেরত দিতে এসেছেন। মালিকের ডেস্কের পাশে যান।" : w.name + " একটা " + w.cat + "-এর বই ধার নিতে এসেছেন। মালিকের ডেস্কের পাশে যান।", 5200); sfx.click(); });
+          }
+          function leaveVisitor(w) { LEND.wait = null; LEND.next = rnd(45, 90); walkTo(w.p, [[0, 6.8], [0, 9.3], [0, 14], [0, 16.8]], function () { w.p.gone = true; w.p.g.visible = false; }); }
+          function showLend() {
+            var w = LEND.wait; if (!w || !w.ready) return; var box = $("ldL"); box.innerHTML = "";
+            if (w.kind === "return") {
+              var match = w.item.book.cat === w.item.cat, r = match ? 4 + (Math.random() < 0.6 ? 1 : 0) : 2 + Math.floor(Math.random() * 2), pay = r * 3 + (match ? 4 : 0);
+              $("ldT").textContent = w.name + " বই ফেরত দিলেন"; $("ldP").innerHTML = "";
+              var st = document.createElement("div"); st.className = "stars"; st.textContent = "★★★★★".slice(0, r) + "☆☆☆☆☆".slice(0, 5 - r); $("ldP").appendChild(st);
+              var tx = document.createElement("p"); tx.style.marginTop = "8px"; tx.textContent = "“" + pick(REV[r]) + "” (" + w.item.book.t + ")"; $("ldP").appendChild(tx);
+              var pp = document.createElement("p"); pp.textContent = "ভাড়া বাবদ ৳" + bn(pay) + " পেলেন।"; $("ldP").appendChild(pp);
+              var ok = document.createElement("button"); ok.className = "big"; ok.textContent = "ঠিক আছে"; ok.onclick = function () { G.money += pay; updHud(); sfx.coin(); openSheet("lend", false); leaveVisitor(w); }; box.appendChild(ok);
+              $("ldX").style.display = "none";
+            } else {
+              $("ldT").textContent = w.name + " ধার চাইছেন"; $("ldP").textContent = "বললেন: “আমাকে একটা " + w.cat + "-এর বই দিন।” আপনার পছন্দের বই দিন, তিনি কিছুদিন পরে ফেরত দিয়ে মতামত জানাবেন। ধরনের সাথে না মিললে মতামত খারাপ হতে পারে।"; $("ldX").style.display = "";
+              var order = [w.cat, "আমার বই"].concat(Object.keys(CATS).filter(function (c) { return c !== w.cat && c !== "আমার বই"; }));
+              order.forEach(function (c) { (allBooks[c] || []).forEach(function (b) {
+                var it = document.createElement("button"); it.className = "item"; var i = document.createElement("i"); i.style.background = "#" + ("000000" + b.color.toString(16)).slice(-6);
+                var d = document.createElement("div"), t1 = document.createElement("b"), a = document.createElement("span"); t1.textContent = b.t; a.textContent = c + (c === w.cat ? " · চাওয়া ধরন" : ""); d.appendChild(t1); d.appendChild(a); it.appendChild(i); it.appendChild(d);
+                it.onclick = function () { openSheet("lend", false); LEND.out.push({ book: b, name: w.name, cat: w.cat, t: rnd(80, 140) }); toast("“" + b.t + "” ধার দিলেন। " + w.name + " কয়েকদিন পরে ফেরত দেবেন।", 4200); sfx.rustle(2); leaveVisitor(w); };
+                box.appendChild(it); }); });
+            }
+            openSheet("lend", true);
+          }
+          $("ldX").onclick = function () { openSheet("lend", false); };
+
+          /* ---------- manga bindery ---------- */
+          var BI = { files: [], sample: false, chapters: 0, busy: false };
+          function biInfo() {
+            var n = BI.chapters; $("bInfo").textContent = n ? "অধ্যায়: " + bn(n) + "টি · খরচ ৳" + bn(n * 2) + (BI.sample ? " (নমুনা)" : "") + " · আপনার টাকা ৳" + bn(G.money) : "এখনো কোনো অধ্যায় বাছা হয়নি।";
+            $("bVolRow").style.display = $("bMode").value === "vol" ? "flex" : "none"; $("bGo").disabled = BI.busy || !n;
+          }
+          function openBind() { biInfo(); openSheet("bind", true); }
+          function coverFrom(b) {
+            pdfPage(b, 0, function (c) {
+              if (!c) return; var cc = document.createElement("canvas"); cc.width = 300; cc.height = 420; cc.getContext("2d").drawImage(c, 0, 0, 300, 420); b.cover = cc;
+              var px = cc.getContext("2d").getImageData(0, 0, 300, 420).data, r = 0, g = 0, bl = 0, n = 0; for (var i = 0; i < px.length; i += 400) { r += px[i]; g += px[i + 1]; bl += px[i + 2]; n++; }
+              b.color = ((r / n * 0.6) << 16) | ((g / n * 0.6) << 8) | (bl / n * 0.6); if (BK.book === b) drawCover(b);
+            });
+          }
+          $("bX").onclick = function () { openSheet("bind", false); };
+          $("bMode").onchange = biInfo; $("bPick").onclick = function () { $("chIn").click(); };
+          $("chIn").onchange = function () {
+            var fs = Array.prototype.slice.call(this.files).sort(function (a, b) { return a.name.localeCompare(b.name, undefined, { numeric: true }); }); this.value = ""; if (!fs.length) return;
+            BI.files = fs; BI.sample = false; BI.chapters = fs.length;
+            if ($("bName").value === "আমার মাঙ্গা" || $("bName").value === "চেইনসম্যান") { var nm = fs[0].name.replace(/\.pdf$/i, "").replace(/[\s_\-]*(ch|chapter|অধ্যায়)?[\s_\-]*\d+.*$/i, ""); if (nm) $("bName").value = nm; }
+            biInfo();
+          };
+          $("bSample").onclick = function () { BI.files = []; BI.sample = true; BI.chapters = 232; $("bName").value = "চেইনসম্যান"; biInfo(); };
+          $("bGo").onclick = function () {
+            if (BI.busy || !BI.chapters) return; var n = BI.chapters, cost = n * 2;
+            if (G.money < cost) { toast("টাকা কম পড়ছে! বাঁধাইয়ে ৳" + bn(cost) + " লাগে। বই ধার দিয়ে টাকা কামান।", 4800); return; }
+            G.money -= cost; updHud(); sfx.coin(); BI.busy = true; biInfo();
+            var name = $("bName").value.trim() || "আমার মাঙ্গা", files = BI.files.slice(), sample = BI.sample, mode = $("bMode").value, per = clamp(+$("bVol").value || 30, 5, 100), parts = [], t0 = performance.now(), bar = $("bBar");
+            bar.style.width = "0"; toast("বাঁধাইকর কাজ শুরু করলেন…", 2600);
+            function finish() {
+              var chunks = [], made = [];
+              if (mode === "vol") for (var i = 0; i < n; i += per) chunks.push([i, Math.min(n, i + per)]); else chunks.push([0, n]);
+              chunks.forEach(function (r, k) {
+                var title = chunks.length > 1 ? name + " — খণ্ড " + bn(k + 1) : name, b = { t: title, a: "বাঁধাইকরের তৈরি · " + bn(r[1] - r[0]) + " অধ্যায়", cat: "আমার বই", color: BOOKCOL[hash(name + k) % BOOKCOL.length] };
+                if (sample) b.pages = (r[1] - r[0]) * 3;
+                else { var st = 0; b.parts = parts.slice(r[0], r[1]).map(function (pt) { var o = { file: pt.file, n: pt.n, start: st, doc: null }; st += pt.n; return o; }); b.pages = st; b.cache = {}; coverFrom(b); }
+                myBooks.push(b); made.push(b);
+              });
+              BI.busy = false; BI.files = []; BI.sample = false; BI.chapters = 0; bar.style.width = "100%"; sfx.click(); biInfo();
+              toast("বাঁধাই শেষ! " + bn(made.length) + "টি বই “আমার বই” তাকে রাখা হয়েছে।", 5500);
+            }
+            if (sample) {
+              var minMs = Math.min(20000, 5000 + n * 55);
+              var iv = setInterval(function () { var u = (performance.now() - t0) / minMs; bar.style.width = Math.min(100, u * 100) + "%"; if (u >= 1) { clearInterval(iv); finish(); } }, 200);
+            } else {
+              var i = 0;
+              (function next() {
+                if (i >= files.length) { setTimeout(finish, Math.max(0, Math.min(8000, 2000 + n * 40) - (performance.now() - t0))); return; }
+                var f = files[i], fr = new FileReader();
+                fr.onload = function () {
+                  window.pdfjsLib.getDocument({ data: new Uint8Array(fr.result) }).promise.then(function (d) { parts.push({ file: f, n: d.numPages }); if (d.destroy) d.destroy(); }).catch(function () {}).then(function () { i++; bar.style.width = (i / files.length * 100) + "%"; next(); });
+                };
+                fr.onerror = function () { i++; next(); };
+                fr.readAsArrayBuffer(f);
+              })();
+            }
+          };
+
+          /* owner + power */
+          function endShed() { G.shed.on = false; G.flick = 1.4; G.shed.next = rnd(150, 300); toast("কারেন্ট এসেছে। বাতি জ্বলে উঠল।", 3000); sfx.click(); }
+          function startShed() { G.shed.on = true; G.shed.dur = rnd(40, 75); G.shed.t = 0; sfx.click(); sfx.murmur(); toast("লোডশেডিং! বাতি নিভে গেল। জানালার ধারে গেলে আলো পাবেন, নয়তো টর্চ জ্বালান।", 5200); }
+          function ownerUpdate(dt) {
+            var want = ENV.day < 0.5; var o = G.owner;
+            if (o.mode === "home" && want !== G.sw) {
+              o.mode = "go"; walkTo(owner, [[8.6, 5.7], [9.3, 5.3]], function () { o.mode = "flip"; o.t = 0.7; });
+            } else if (o.mode === "flip") {
+              o.t -= dt; owner.g.rotation.y = -Math.PI / 2; owner.aR.rotation.x = 1.2;
+              if (o.t <= 0) { G.sw = want; swKnob.rotation.z = G.sw ? 0 : Math.PI; G.flick = G.sw ? 1.2 : 0; sfx.click(); owner.aR.rotation.x = 0; o.mode = "back";
+                toast(G.sw ? "মালিক বাতি জ্বালালেন।" : "মালিক বাতি নিভিয়ে দিলেন।", 3200);
+                walkTo(owner, [[8.6, 5.7], OWNER_HOME], function () { o.mode = "home"; place(owner, OWNER_HOME[0], OWNER_HOME[1], Math.PI); }); }
+            }
+          }
+          function lampUpdate(dt) {
+            var tgt = G.sw && !G.shed.on ? 1 : 0; G.lamp += (tgt - G.lamp) * Math.min(1, dt * 3.5); if (G.flick > 0) G.flick -= dt;
+          }
+
+          function personUpdate(p, dt) {
+            p.t += dt;
+            if (p.st === "walk") {
+              var tg = p.path[0];
+              if (!tg) { poseStand(p); var f = p.done; p.done = null; if (f) f(); return; }
+              var dx = tg[0] - p.g.position.x, dz = tg[1] - p.g.position.z, d = Math.hypot(dx, dz);
+              if (d < 0.12) { p.path.shift(); return; }
+              var sp = p.speed * dt; p.g.position.x += dx / d * Math.min(sp, d); p.g.position.z += dz / d * Math.min(sp, d);
+              var ty = Math.atan2(-dx, -dz); p.yaw += angDiff(p.yaw, ty) * Math.min(1, dt * 8); p.g.rotation.y = p.yaw;
+              var sw = Math.sin(p.t * 7) * 0.6; p.lL.rotation.x = sw; p.lR.rotation.x = -sw; p.aL.rotation.x = -sw * 0.7; p.aR.rotation.x = sw * 0.7;
+            } else if (p.st === "seat") {
+              p.head.position.y = 1.62 + Math.sin(p.t * 0.9 + p.nextFlip) * 0.004;
+              if (p.lookT > 0) { p.lookT -= dt; var ang = Math.atan2(-(P.x - p.g.position.x), -(P.z - p.g.position.z)); p.head.rotation.y = clamp(angDiff(p.yaw, ang), -1.2, 1.2); p.head.rotation.x = -0.05; }
+              else { p.head.rotation.y *= 0.9; p.head.rotation.x = -0.4 + Math.sin(p.t * 0.6) * 0.04; }
+              p.nextFlip -= dt; if (p.nextFlip <= 0) { p.nextFlip = rnd(5, 14); p.prop.rotation.z = 0.25; setTimeout(function () { p.prop.rotation.z = 0; }, 350); }
+              p.leaveAt -= dt;
+            } else if (p.st === "stand" && !p.browse) { p.lL.rotation.x = p.lR.rotation.x = 0; }
+            else if (p.browse) { p.head.rotation.x = 0; p.up.rotation.y = Math.sin(p.t * 0.4) * 0.05; }
+          }
+          function popQueue() {
+            var p = queue.shift(); if (!p) return; p.queued = false; G.queueTimer = 6.5;
+            queue.forEach(function (q, i) { var s = qSlot(i); walkTo(q, [s]); });
+            var fs = freeSeats(); var s = fs.length ? pick(fs) : null;
+            if (!s) { walkTo(p, [[0, 9.3], [0, 14], [0, 16.8]], function () { p.gone = true; p.g.visible = false; }); return; }
+            s.npc = p; walkTo(p, [[-3.2, 12], [0, 9.3], [0, 6.5]].concat(s.route, [[s.x, s.z]]), function () { poseSeat(p, s); });
+          }
+          function gameLogic(dt) {
+            G.tick += dt;
+            var speed = CFG.speed * (BK.mode === "open" ? 4 : 1);
+            G.hour = (G.hour + dt * speed / 3600) % 24;
+            envCalc(G.hour); ownerUpdate(dt); lampUpdate(dt);
+            if (CFG.shed && G.ticket) {
+              if (!G.shed.on) { G.shed.next -= dt; if (G.shed.next <= 0 && G.lamp > 0.9) startShed(); }
+              else { G.shed.t += dt; if (G.shed.t >= G.shed.dur) endShed(); }
+            }
+            G.queueTimer -= dt;
+            if (queue.length && G.queueTimer <= 0 && !(Math.hypot(P.x - QX, P.z - QZ) < 2.1 && !G.ticket && false)) {
+              if (G.ticket || queue.length) { if (!G.ticket && !queue.length) {} else popQueue(); }
+            }
+            if (G.ticket) {
+              G.arrive -= dt; if (G.arrive <= 0) { G.arrive = rnd(16, 32); if (queue.length < 3 && persons.length < 60) { var q = mkPerson(); place(q, 0.8, 15.7, Math.PI); q.queued = true; queue.push(q); walkTo(q, [qSlot(queue.length - 1)]); } }
+              G.leaveCheck -= dt;
+              if (G.leaveCheck <= 0) { G.leaveCheck = rnd(10, 22);
+                var lv = seats.filter(function (s) { return s.npc && s.npc.st === "seat" && s.npc.leaveAt <= 0; })[0];
+                if (lv) { var p = lv.npc; lv.npc = null; walkTo(p, [[lv.route[lv.route.length - 1][0], lv.route[lv.route.length - 1][1]], lv.route[0], [0, 6.5], [0, 9.3], [0, 14], [0, 16.8]], function () { p.gone = true; p.g.visible = false; }); } }
+            }
+            if (G.ticket) {
+              LEND.out.forEach(function (o) { o.t -= dt; });
+              if (!LEND.wait) { var due = LEND.out.filter(function (o) { return o.t <= 0; })[0]; if (due) spawnVisitor("return", due); else { LEND.next -= dt; if (LEND.next <= 0) spawnVisitor("borrow"); } }
+            }
+            binder.aL.rotation.x = BI.busy ? 0.9 + Math.sin(G.tick * 8) * 0.4 : 0; binder.aR.rotation.x = BI.busy ? 0.9 + Math.cos(G.tick * 8) * 0.4 : 0;
+            /* gate */
+            var gy = gateBar.position.y, gt = G.ticket ? 3.2 : 1.0; gateBar.position.y += (gt - gy) * Math.min(1, dt * 3); gateCol[4] = !G.ticket;
+            persons.forEach(function (p) { if (!p.gone) personUpdate(p, dt); }); if (G.tick % 5 < dt) recycle();
+          }
+
+          var tmpMat = null;
+          function step(dt) {
+            if (!G.started) {
+              if (!G.hour) G.hour = realHour(); envCalc(G.hour); G.lamp = G.sw && !G.shed.on ? 1 : 0; camera.position.set(0, 1.62, 14.8); camera.rotation.set(0, Math.sin(performance.now() / 4000) * 0.3, 0); applyEnv(); persons.forEach(function (p) { if (!p.gone) personUpdate(p, dt); }); return;
+            }
+            gameLogic(dt);
+            /* movement */
+            var mx = joy.x, my = joy.y;
+            if (keys.w || keys.arrowup) my = -1; if (keys.s || keys.arrowdown) my = 1; if (keys.a) mx = -1; if (keys.d) mx = 1;
+            moveMag = Math.min(1, Math.hypot(mx, my));
+            if (tw) {
+              tw.t += dt / tw.d; var u = sm(tw.t); P.x = lerp(tw.fx, tw.tx, u); P.z = lerp(tw.fz, tw.tz, u); P.y = lerp(tw.fy, tw.ty, u); P.yaw = tw.fyaw + angDiff(tw.fyaw, tw.tyaw) * u;
+              if (tw.t >= 1) { var f = tw.done; tw = null; if (f) f(); }
+            } else if (!G.seated && moveMag > 0.05) {
+              var sp = 2.0 * moveMag * dt, fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw), rx = Math.cos(P.yaw), rz = -Math.sin(P.yaw);
+              var dx = (rx * mx + fx * -my) * sp, dz = (rz * mx + fz * -my) * sp;
+              if (!hitAt(P.x + dx, P.z)) P.x += dx; if (!hitAt(P.x, P.z + dz)) P.z += dz;
+              G.step = (G.step || 0) + sp; if (G.step > 0.78) { G.step = 0; sfx.step(); }
+            }
+            var bob = !G.seated && !tw && moveMag > 0.05 ? Math.sin(G.tick * 9) * 0.018 : 0;
+            camera.position.set(P.x, P.y + bob, P.z); camera.rotation.order = "YXZ"; camera.rotation.set(P.pitch, P.yaw, 0);
+            applyEnv(); updateBook(dt); audioUpdate(dt);
+            /* action + hints */
+            act = findAction(); var ab = $("act");
+            if (act && act.label && !document.querySelector(".sheet.on")) { ab.style.display = "block"; if (ab.textContent !== act.label) ab.textContent = act.label; } else ab.style.display = "none";
+            var L = readLevel(), hm = "";
+            if (act && act.hint) hm = act.hint;
+            else if (!G.ticket && !act) hm = P.z > 8.5 ? "টিকিট ঘরে যান, বাঁ দিকে কাউন্টার" : "";
+            else if (G.seated && BK.mode === "open" && L < 0.2) hm = "আলো কম, পড়া যাচ্ছে না। টর্চ জ্বালান বা জানালার ধারে বসুন।";
+            else if (G.seated && BK.mode === "open" && L < 0.4) hm = "আলো কমে এসেছে, পড়তে কষ্ট হচ্ছে।";
+            hint(hm);
+            $("vig").style.opacity = BK.mode === "open" ? String(clamp(0.9 - L * 1.1, 0, 0.85)) : String(clamp(0.5 - L, 0, 0.5) * 0.9);
+            $("tm").textContent = fmtTime(G.hour); $("part").textContent = part(G.hour) + (G.shed.on ? " · লোডশেডিং" : "");
+          }
+
+          /* ---------- boot ---------- */
+          var last = performance.now();
+          function loop(now) { var dt = Math.min(0.05, (now - last) / 1000); last = now; try { step(dt); renderer.render(scene, camera); } catch (e) { if (!loop.err) { loop.err = 1; var s = $("stErr"); s.textContent = "ত্রুটি: " + e.message; } } requestAnimationFrame(loop); }
+          window.addEventListener("resize", fit);
+          $("stP").textContent = "এখন বাজে " + fmtTime(realHour()) + " (" + part(realHour()) + ")। পাঠাগারেও এই সময়টাই থাকবে।";
+          $("go").onclick = function () {
+            audioInit(); openSheet("start", false); G.started = true; G.t0 = performance.now(); G.hour = realHour(); G.sw = realHour() > 0 && sm((realHour() - RISE + 0.6) / 1.4) * sm((SET + 0.6 - realHour()) / 1.4) >= 0.5; G.lamp = G.sw ? 1 : 0; swKnob.rotation.z = G.sw ? 0 : Math.PI; G.state = "walk"; updHud();
+            toast("ঢুকে পড়ুন। বাঁ দিকের কাউন্টারে টিকিট কাটতে হবে।", 4500);
+            try { if (document.fonts && document.fonts.load) { document.fonts.load("30px 'Hind Siliguri'", "আ").then(function () { if (BK.book) { drawCover(BK.book); drawSpread(); } }); } } catch (e) {}
+          };
+          document.addEventListener("visibilitychange", function () { if (AC) { if (document.hidden) AC.suspend(); else AC.resume(); } });
+          G.hour = realHour(); envCalc(G.hour); G.sw = ENV.day >= 0.5; G.lamp = G.sw ? 1 : 0;
+          fit(); layoutBook(); updHud(); syncSettings(); requestAnimationFrame(loop);
+          window.__pf = { P: P, G: G, ENV: ENV, BK: BK, CFG: CFG, step: step, seats: seats, shelves: shelves, hold: holdBook, allBooks: allBooks, sit: sit, setOpen: setOpen, flip: flip, LEND: LEND, FN: FN, BI: BI, spawnVisitor: spawnVisitor, showLend: showLend, persons: function(){return persons;} };
+          })();
+          </script>
+          </body></html>
+          PATH_EOF
+          mkdir -p pathagar-app/app/src/main/java/com/pathagar/app
+          cat > pathagar-app/app/src/main/java/com/pathagar/app/MainActivity.kt <<'PATH_EOF'
+          package com.pathagar.app
+
+          import android.app.Activity
+          import android.content.Intent
+          import android.graphics.Color
+          import android.net.Uri
+          import android.os.Bundle
+          import android.view.View
+          import android.webkit.ValueCallback
+          import android.webkit.WebChromeClient
+          import android.webkit.WebSettings
+          import android.webkit.WebView
+          import android.webkit.WebViewClient
+
+          /** ওয়েব-ভিত্তিক ৩ডি পাঠাগারকে পুরো পর্দার অ্যাপে চালায়। থ্রিডি ও পিডিএফ লাইব্রেরি ইন্টারনেট থেকে আসে। */
+          class MainActivity : Activity() {
+
+              private lateinit var web: WebView
+              private var chooser: ValueCallback<Array<Uri>>? = null
+
+              @Suppress("DEPRECATION")
+              private fun immersive() {
+                  window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                      or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                      or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                      or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                      or View.SYSTEM_UI_FLAG_FULLSCREEN
+                      or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
+              }
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  immersive()
+                  web = WebView(this)
+                  web.setBackgroundColor(Color.parseColor("#0c0907"))
+                  setContentView(web)
+
+                  val s = web.settings
+                  s.javaScriptEnabled = true
+                  s.domStorageEnabled = true
+                  s.allowFileAccess = true
+                  s.mediaPlaybackRequiresUserGesture = false
+                  s.cacheMode = WebSettings.LOAD_DEFAULT
+                  s.setSupportZoom(false)
+
+                  web.webViewClient = WebViewClient()
+                  web.webChromeClient = object : WebChromeClient() {
+                      override fun onShowFileChooser(
+                          w: WebView,
+                          cb: ValueCallback<Array<Uri>>,
+                          params: FileChooserParams
+                      ): Boolean {
+                          chooser?.onReceiveValue(null)
+                          chooser = cb
+                          val i = try {
+                              params.createIntent()
+                          } catch (e: Exception) {
+                              Intent(Intent.ACTION_GET_CONTENT).apply {
+                                  type = "application/pdf"
+                                  addCategory(Intent.CATEGORY_OPENABLE)
+                                  putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                              }
+                          }
+                          return try {
+                              @Suppress("DEPRECATION")
+                              startActivityForResult(i, 77)
+                              true
+                          } catch (e: Exception) {
+                              chooser = null
+                              false
+                          }
+                      }
+                  }
+                  web.loadUrl("file:///android_asset/index.html")
+              }
+
+              @Suppress("DEPRECATION")
+              override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+                  if (requestCode == 77) {
+                      chooser?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data))
+                      chooser = null
+                  } else {
+                      super.onActivityResult(requestCode, resultCode, data)
+                  }
+              }
+
+              override fun onResume() { super.onResume(); web.onResume(); immersive() }
+              override fun onPause() { web.onPause(); super.onPause() }
+              override fun onWindowFocusChanged(hasFocus: Boolean) { super.onWindowFocusChanged(hasFocus); if (hasFocus) immersive() }
+          }
+          PATH_EOF
+          mkdir -p pathagar-app/app/src/main/res/drawable
+          cat > pathagar-app/app/src/main/res/drawable/ic_launcher_background.xml <<'PATH_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path
+                  android:fillColor="#2B1C11"
+                  android:pathData="M0,0h108v108h-108z" />
+          </vector>
+          PATH_EOF
+          mkdir -p pathagar-app/app/src/main/res/drawable
+          cat > pathagar-app/app/src/main/res/drawable/ic_launcher_foreground.xml <<'PATH_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path
+                  android:fillColor="#E3A548"
+                  android:pathData="M30,36 L52,40 L52,76 L30,72 Z" />
+              <path
+                  android:fillColor="#F4E7C9"
+                  android:pathData="M56,40 L78,36 L78,72 L56,76 Z" />
+              <path
+                  android:fillColor="#8C5C34"
+                  android:pathData="M52,40 L56,40 L56,76 L52,76 Z" />
+          </vector>
+          PATH_EOF
+          mkdir -p pathagar-app/app/src/main/res/mipmap-anydpi-v26
+          cat > pathagar-app/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml <<'PATH_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@drawable/ic_launcher_background" />
+              <foreground android:drawable="@drawable/ic_launcher_foreground" />
+          </adaptive-icon>
+          PATH_EOF
+          mkdir -p pathagar-app/app/src/main/res/mipmap-anydpi-v26
+          cat > pathagar-app/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml <<'PATH_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@drawable/ic_launcher_background" />
+              <foreground android:drawable="@drawable/ic_launcher_foreground" />
+          </adaptive-icon>
+          PATH_EOF
+          mkdir -p pathagar-app/app/src/main/res/values
+          cat > pathagar-app/app/src/main/res/values/strings.xml <<'PATH_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">আমার পাঠাগার</string>
+          </resources>
+          PATH_EOF
+          cat > pathagar-app/build.gradle.kts <<'PATH_EOF'
+          plugins {
+              id("com.android.application") version "8.5.2" apply false
+              id("org.jetbrains.kotlin.android") version "1.9.24" apply false
+          }
+          PATH_EOF
+          cat > pathagar-app/gradle.properties <<'PATH_EOF'
+          org.gradle.jvmargs=-Xmx2g -Dfile.encoding=UTF-8
+          android.nonTransitiveRClass=true
+          kotlin.code.style=official
+          PATH_EOF
+          cat > pathagar-app/settings.gradle.kts <<'PATH_EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "Pathagar"
+          include(":app")
+          PATH_EOF
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.7
+
+      - name: Build debug APK
+        working-directory: pathagar-app
+        run: gradle assembleDebug --no-daemon
+
+      - name: Rename APK
+        run: cp pathagar-app/app/build/outputs/apk/debug/app-debug.apk pathagar.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pathagar-apk
+          path: pathagar.apk
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: pathagar-v${{ github.run_number }}
+          name: আমার পাঠাগার v${{ github.run_number }}
+          files: pathagar.apk
