@@ -1,0 +1,962 @@
+name: Build Bristi APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/build-bristi.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write project files
+        run: |
+          mkdir -p bristi-app/app
+          cat > bristi-app/app/build.gradle.kts <<'BRISTI_EOF'
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+          }
+
+          android {
+              namespace = "com.bristi.app"
+              compileSdk = 34
+
+              defaultConfig {
+                  applicationId = "com.bristi.app"
+                  minSdk = 26
+                  targetSdk = 34
+                  versionCode = 1
+                  versionName = "1.0"
+              }
+
+              buildTypes {
+                  release {
+                      isMinifyEnabled = false
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+          }
+          BRISTI_EOF
+          mkdir -p bristi-app/app/src/main
+          cat > bristi-app/app/src/main/AndroidManifest.xml <<'BRISTI_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+              <application
+                  android:allowBackup="false"
+                  android:icon="@mipmap/ic_launcher"
+                  android:roundIcon="@mipmap/ic_launcher_round"
+                  android:label="@string/app_name"
+                  android:theme="@android:style/Theme.Material.NoActionBar">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+
+                  <service
+                      android:name=".RainService"
+                      android:exported="false"
+                      android:foregroundServiceType="specialUse">
+                      <property
+                          android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                          android:value="screen_overlay_weather_effect" />
+                  </service>
+              </application>
+          </manifest>
+          BRISTI_EOF
+          mkdir -p bristi-app/app/src/main/java/com/bristi/app
+          cat > bristi-app/app/src/main/java/com/bristi/app/Cities.kt <<'BRISTI_EOF'
+          package com.bristi.app
+
+          object Cities {
+              val names = arrayOf("ঢাকা", "চট্টগ্রাম", "সিলেট", "রাজশাহী", "খুলনা", "বরিশাল", "রংপুর", "ময়মনসিংহ", "কক্সবাজার", "কুমিল্লা")
+              val lat = doubleArrayOf(23.81, 22.36, 24.90, 24.37, 22.82, 22.70, 25.74, 24.75, 21.43, 23.46)
+              val lon = doubleArrayOf(90.41, 91.78, 91.87, 88.60, 89.55, 90.37, 89.25, 90.41, 91.98, 91.18)
+          }
+          BRISTI_EOF
+          mkdir -p bristi-app/app/src/main/java/com/bristi/app
+          cat > bristi-app/app/src/main/java/com/bristi/app/MainActivity.kt <<'BRISTI_EOF'
+          package com.bristi.app
+
+          import android.Manifest
+          import android.app.Activity
+          import android.content.Context
+          import android.content.Intent
+          import android.net.Uri
+          import android.os.Build
+          import android.os.Bundle
+          import android.os.Handler
+          import android.os.Looper
+          import android.provider.Settings
+          import android.view.View
+          import android.widget.AdapterView
+          import android.widget.ArrayAdapter
+          import android.widget.Button
+          import android.widget.LinearLayout
+          import android.widget.RadioButton
+          import android.widget.RadioGroup
+          import android.widget.ScrollView
+          import android.widget.SeekBar
+          import android.widget.Spinner
+          import android.widget.Switch
+          import android.widget.TextView
+
+          class MainActivity : Activity() {
+
+              private val h = Handler(Looper.getMainLooper())
+              private lateinit var status: TextView
+              private lateinit var permBtn: Button
+              private lateinit var master: Switch
+
+              private fun sp() = getSharedPreferences("bristi", Context.MODE_PRIVATE)
+              private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+
+              private fun text(s: String, size: Float, color: Int): TextView {
+                  val t = TextView(this)
+                  t.text = s
+                  t.textSize = size
+                  t.setTextColor(color)
+                  t.setPadding(0, dp(6), 0, dp(6))
+                  return t
+              }
+
+              private fun toggle(label: String, key: String, def: Boolean): Switch {
+                  val s = Switch(this)
+                  s.text = label
+                  s.textSize = 16f
+                  s.setTextColor(0xFFE6EEF5.toInt())
+                  s.setPadding(0, dp(10), 0, dp(10))
+                  s.isChecked = sp().getBoolean(key, def)
+                  s.setOnCheckedChangeListener { _, on -> sp().edit().putBoolean(key, on).apply() }
+                  return s
+              }
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  val root = LinearLayout(this)
+                  root.orientation = LinearLayout.VERTICAL
+                  root.setPadding(dp(20), dp(28), dp(20), dp(28))
+                  root.setBackgroundColor(0xFF0B1118.toInt())
+
+                  root.addView(text("বৃষ্টি-ফোন", 30f, 0xFFFFFFFF.toInt()))
+                  root.addView(text("আসল বৃষ্টি হলে আপনার ফোনের পর্দাতেও বৃষ্টি নামবে, কুয়াশা জমবে, বজ্র ডাকবে। আপনি নিচের অ্যাপে স্বাভাবিক কাজ করতে পারবেন।", 14f, 0xFF93A6B6.toInt()))
+
+                  status = text("", 16f, 0xFF59A8E6.toInt())
+                  root.addView(status)
+
+                  permBtn = Button(this)
+                  permBtn.text = "অন্য অ্যাপের ওপরে দেখানোর অনুমতি দিন"
+                  permBtn.setOnClickListener {
+                      startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + packageName)))
+                  }
+                  root.addView(permBtn)
+
+                  master = Switch(this)
+                  master.text = "চালু রাখুন"
+                  master.textSize = 18f
+                  master.setTextColor(0xFFFFFFFF.toInt())
+                  master.setPadding(0, dp(14), 0, dp(14))
+                  master.isChecked = sp().getBoolean("on", false)
+                  master.setOnCheckedChangeListener { _, on ->
+                      sp().edit().putBoolean("on", on).apply()
+                      applyService()
+                  }
+                  root.addView(master)
+
+                  root.addView(text("কোন শহরের আবহাওয়া দেখবে", 14f, 0xFF93A6B6.toInt()))
+                  val sc = Spinner(this)
+                  sc.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, Cities.names)
+                  sc.setSelection(sp().getInt("city", 0).coerceIn(0, Cities.names.size - 1))
+                  sc.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                      override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) {
+                          sp().edit().putInt("city", pos).apply()
+                      }
+
+                      override fun onNothingSelected(p: AdapterView<*>?) {}
+                  }
+                  root.addView(sc)
+
+                  root.addView(text("কখন বৃষ্টি হবে", 14f, 0xFF93A6B6.toInt()))
+                  val rg = RadioGroup(this)
+                  val labels = arrayOf("আসল বৃষ্টিতে নিজে নিজে", "এখনই বৃষ্টি চলুক (পরীক্ষা)", "বৃষ্টি বন্ধ")
+                  val modes = intArrayOf(0, 1, 2)
+                  for (i in labels.indices) {
+                      val rb = RadioButton(this)
+                      rb.id = 100 + i
+                      rb.text = labels[i]
+                      rb.setTextColor(0xFFE6EEF5.toInt())
+                      rg.addView(rb)
+                  }
+                  rg.check(100 + sp().getInt("mode", 0).coerceIn(0, 2))
+                  rg.setOnCheckedChangeListener { _, id -> sp().edit().putInt("mode", modes[id - 100]).apply() }
+                  root.addView(rg)
+
+                  root.addView(text("তীব্রতা (পরীক্ষার সময়)", 14f, 0xFF93A6B6.toInt()))
+                  val sb = SeekBar(this)
+                  sb.max = 100
+                  sb.progress = sp().getInt("manualI", 60)
+                  sb.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                      override fun onProgressChanged(s: SeekBar?, p: Int, u: Boolean) {
+                          sp().edit().putInt("manualI", maxOf(5, p)).apply()
+                      }
+
+                      override fun onStartTrackingTouch(s: SeekBar?) {}
+                      override fun onStopTrackingTouch(s: SeekBar?) {}
+                  })
+                  root.addView(sb)
+
+                  root.addView(toggle("বৃষ্টির শব্দ", "sound", true))
+                  root.addView(toggle("বজ্রপাত (ঝলক আর গর্জন)", "thunder", true))
+                  root.addView(toggle("পেছনের পর্দা ঝাপসা (অ্যান্ড্রয়েড ১২+, সব ফোনে নাও চলতে পারে)", "blur", true))
+
+                  root.addView(text("আওয়াজ", 14f, 0xFF93A6B6.toInt()))
+                  val vb = SeekBar(this)
+                  vb.max = 100
+                  vb.progress = sp().getInt("vol", 70)
+                  vb.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                      override fun onProgressChanged(s: SeekBar?, p: Int, u: Boolean) {
+                          sp().edit().putInt("vol", p).apply()
+                      }
+
+                      override fun onStartTrackingTouch(s: SeekBar?) {}
+                      override fun onStopTrackingTouch(s: SeekBar?) {}
+                  })
+                  root.addView(vb)
+
+                  root.addView(text("ব্যাংকিং ও পাসওয়ার্ডের কিছু অ্যাপ নিরাপত্তার কারণে ওপরের স্তর লুকিয়ে ফেলে, সেখানে বৃষ্টি দেখা নাও যেতে পারে।", 12f, 0xFF6F8294.toInt()))
+
+                  val scroll = ScrollView(this)
+                  scroll.addView(root)
+                  setContentView(scroll)
+
+                  if (Build.VERSION.SDK_INT >= 33) {
+                      requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 5)
+                  }
+              }
+
+              private fun applyService() {
+                  val i = Intent(this, RainService::class.java)
+                  if (sp().getBoolean("on", false)) {
+                      if (!Settings.canDrawOverlays(this)) {
+                          status.text = "আগে ওপরের বোতামে অনুমতি দিন, তারপর আবার চালু করুন।"
+                          master.isChecked = false
+                          return
+                      }
+                      startForegroundService(i)
+                  } else {
+                      stopService(i)
+                  }
+              }
+
+              private val poll = object : Runnable {
+                  override fun run() {
+                      val ok = Settings.canDrawOverlays(this@MainActivity)
+                      permBtn.visibility = if (ok) View.GONE else View.VISIBLE
+                      val on = sp().getBoolean("on", false)
+                      if (on) {
+                          status.text = sp().getString("status", "আবহাওয়া দেখছি…") ?: ""
+                      } else if (ok) {
+                          status.text = "বন্ধ আছে। ওপরের সুইচ চালু করুন।"
+                      }
+                      h.postDelayed(this, 2000)
+                  }
+              }
+
+              override fun onResume() {
+                  super.onResume()
+                  h.post(poll)
+              }
+
+              override fun onPause() {
+                  h.removeCallbacks(poll)
+                  super.onPause()
+              }
+          }
+          BRISTI_EOF
+          mkdir -p bristi-app/app/src/main/java/com/bristi/app
+          cat > bristi-app/app/src/main/java/com/bristi/app/RainService.kt <<'BRISTI_EOF'
+          package com.bristi.app
+
+          import android.app.Notification
+          import android.app.NotificationChannel
+          import android.app.NotificationManager
+          import android.app.Service
+          import android.content.BroadcastReceiver
+          import android.content.Context
+          import android.content.Intent
+          import android.content.IntentFilter
+          import android.content.pm.ServiceInfo
+          import android.graphics.PixelFormat
+          import android.os.Build
+          import android.os.Handler
+          import android.os.IBinder
+          import android.os.Looper
+          import android.os.SystemClock
+          import android.provider.Settings
+          import android.view.WindowManager
+          import org.json.JSONObject
+          import java.net.HttpURLConnection
+          import java.net.URL
+
+          /** পেছনে চলে: আবহাওয়া দেখে, বৃষ্টি হলে সব অ্যাপের ওপর স্বচ্ছ বৃষ্টির স্তর বসায় আর শব্দ বাজায়। */
+          class RainService : Service() {
+
+              private val h = Handler(Looper.getMainLooper())
+              private lateinit var wm: WindowManager
+              private var view: RainView? = null
+              private var lp: WindowManager.LayoutParams? = null
+              private val sound = RainSound()
+
+              @Volatile private var weatherRain = false
+              @Volatile private var weatherI = 0.5f
+              @Volatile private var weatherThunder = false
+              @Volatile private var alive = true
+              private var screenOn = true
+              private var last = 0L
+              private var nextL = 6f
+              private var prefAt = 0L
+              private var mode = 0
+              private var manualI = 60
+              private var soundOn = true
+              private var thunderOn = true
+              private var blurOn = true
+              private var vol = 70
+              private var blurSet = -1
+
+              private val screenRx = object : BroadcastReceiver() {
+                  override fun onReceive(c: Context?, i: Intent?) {
+                      screenOn = i?.action != Intent.ACTION_SCREEN_OFF
+                      if (!screenOn) sound.stop()
+                  }
+              }
+
+              private val frame = object : Runnable {
+                  override fun run() {
+                      try {
+                          tick()
+                      } catch (e: Exception) {
+                      }
+                      h.postDelayed(this, 33)
+                  }
+              }
+
+              override fun onBind(intent: Intent?): IBinder? = null
+
+              override fun onCreate() {
+                  super.onCreate()
+                  wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+                  val chId = "bristi"
+                  val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                  nm.createNotificationChannel(NotificationChannel(chId, "বৃষ্টি-ফোন", NotificationManager.IMPORTANCE_LOW))
+                  val n: Notification = Notification.Builder(this, chId)
+                      .setContentTitle("বৃষ্টি-ফোন চালু আছে")
+                      .setContentText("আসল বৃষ্টি হলে ফোনেও বৃষ্টি শুরু হবে")
+                      .setSmallIcon(android.R.drawable.ic_dialog_info)
+                      .setOngoing(true)
+                      .build()
+                  if (Build.VERSION.SDK_INT >= 34) {
+                      startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+                  } else {
+                      startForeground(1, n)
+                  }
+                  val f = IntentFilter()
+                  f.addAction(Intent.ACTION_SCREEN_OFF)
+                  f.addAction(Intent.ACTION_SCREEN_ON)
+                  if (Build.VERSION.SDK_INT >= 33) {
+                      registerReceiver(screenRx, f, Context.RECEIVER_NOT_EXPORTED)
+                  } else {
+                      registerReceiver(screenRx, f)
+                  }
+                  last = SystemClock.uptimeMillis()
+                  h.post(frame)
+                  Thread { weatherLoop() }.start()
+              }
+
+              override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+
+              override fun onDestroy() {
+                  alive = false
+                  h.removeCallbacksAndMessages(null)
+                  sound.stop()
+                  removeOverlay()
+                  try {
+                      unregisterReceiver(screenRx)
+                  } catch (e: Exception) {
+                  }
+                  super.onDestroy()
+              }
+
+              // ---------- আবহাওয়া ----------
+
+              private fun setStatus(s: String) {
+                  getSharedPreferences("bristi", Context.MODE_PRIVATE).edit().putString("status", s).apply()
+              }
+
+              private fun weatherLoop() {
+                  var lastCity = -1
+                  var waited = 100000
+                  while (alive) {
+                      val sp = getSharedPreferences("bristi", Context.MODE_PRIVATE)
+                      val city = sp.getInt("city", 0).coerceIn(0, Cities.names.size - 1)
+                      if (city != lastCity || waited >= 600) {
+                          lastCity = city
+                          waited = 0
+                          fetch(city)
+                      }
+                      try {
+                          Thread.sleep(5000)
+                      } catch (e: InterruptedException) {
+                          return
+                      }
+                      waited += 5
+                  }
+              }
+
+              private fun fetch(city: Int) {
+                  try {
+                      val u = "https://api.open-meteo.com/v1/forecast?latitude=" + Cities.lat[city] +
+                          "&longitude=" + Cities.lon[city] + "&current=precipitation,weather_code"
+                      val c = URL(u).openConnection() as HttpURLConnection
+                      c.connectTimeout = 10000
+                      c.readTimeout = 10000
+                      val txt = c.inputStream.bufferedReader().use { it.readText() }
+                      c.disconnect()
+                      val cur = JSONObject(txt).getJSONObject("current")
+                      val p = cur.getDouble("precipitation")
+                      val code = cur.getInt("weather_code")
+                      val rain = p > 0.05 || code in 51..67 || code in 80..82 || code >= 95
+                      weatherRain = rain
+                      weatherThunder = code >= 95
+                      var i = (0.3 + p / 5.0).toFloat()
+                      if (code >= 95 && i < 0.8f) i = 0.8f
+                      weatherI = i.coerceIn(0.3f, 1f)
+                      setStatus(Cities.names[city] + ": " + (if (rain) "এখন বৃষ্টি হচ্ছে" else "এখন বৃষ্টি নেই"))
+                  } catch (e: Exception) {
+                      setStatus("আবহাওয়ার খবর আনা যায়নি, ইন্টারনেট দেখুন")
+                  }
+              }
+
+              // ---------- স্তর ----------
+
+              private fun readPrefs() {
+                  val sp = getSharedPreferences("bristi", Context.MODE_PRIVATE)
+                  mode = sp.getInt("mode", 0)
+                  manualI = sp.getInt("manualI", 60)
+                  soundOn = sp.getBoolean("sound", true)
+                  thunderOn = sp.getBoolean("thunder", true)
+                  blurOn = sp.getBoolean("blur", true)
+                  vol = sp.getInt("vol", 70)
+              }
+
+              private fun ensureOverlay(): RainView? {
+                  view?.let { return it }
+                  if (!Settings.canDrawOverlays(this)) return null
+                  val v = RainView(this)
+                  val p = WindowManager.LayoutParams(
+                      WindowManager.LayoutParams.MATCH_PARENT,
+                      WindowManager.LayoutParams.MATCH_PARENT,
+                      WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                      WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                          WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                          WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                          WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                      PixelFormat.TRANSLUCENT
+                  )
+                  try {
+                      wm.addView(v, p)
+                  } catch (e: Exception) {
+                      return null
+                  }
+                  view = v
+                  lp = p
+                  blurSet = -1
+                  return v
+              }
+
+              private fun removeOverlay() {
+                  val v = view ?: return
+                  try {
+                      wm.removeView(v)
+                  } catch (e: Exception) {
+                  }
+                  view = null
+                  lp = null
+              }
+
+              @Suppress("DEPRECATION")
+              private fun updateBlur(wet: Float) {
+                  if (Build.VERSION.SDK_INT < 31) return
+                  val p = lp ?: return
+                  val v = view ?: return
+                  val r = if (blurOn) (wet * 14f).toInt() else 0
+                  if (r == blurSet) return
+                  blurSet = r
+                  try {
+                      p.blurBehindRadius = r
+                      if (r > 0) {
+                          p.flags = p.flags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND
+                      } else {
+                          p.flags = p.flags and WindowManager.LayoutParams.FLAG_BLUR_BEHIND.inv()
+                      }
+                      wm.updateViewLayout(v, p)
+                  } catch (e: Exception) {
+                  }
+              }
+
+              private fun tick() {
+                  val now = SystemClock.uptimeMillis()
+                  val dt = ((now - last) / 1000f).coerceIn(0f, 0.1f)
+                  last = now
+                  if (now - prefAt > 500) {
+                      prefAt = now
+                      readPrefs()
+                  }
+                  if (!screenOn) return
+
+                  val wanted = when (mode) {
+                      1 -> true
+                      2 -> false
+                      else -> weatherRain
+                  }
+                  val inten = if (mode == 0) weatherI else manualI / 100f
+
+                  val v = view
+                  if (v == null) {
+                      if (wanted) ensureOverlay()
+                      return
+                  }
+                  v.raining = wanted
+                  v.intensity = inten
+                  v.step(dt)
+                  v.invalidate()
+                  if (!wanted && v.wet < 0.02f) {
+                      removeOverlay()
+                      sound.stop()
+                      return
+                  }
+                  updateBlur(v.wet)
+
+                  if (soundOn && wanted) {
+                      sound.level = inten
+                      sound.volume = vol / 100f
+                      sound.start()
+                  } else {
+                      sound.stop()
+                  }
+
+                  val thunderNow = wanted && thunderOn && (if (mode == 0) weatherThunder else inten > 0.35f)
+                  if (thunderNow) {
+                      nextL -= dt
+                      if (nextL <= 0f) {
+                          nextL = (8f + Math.random().toFloat() * 12f) / (0.5f + inten)
+                          v.triggerFlash()
+                          h.postDelayed({ if (view != null) view?.triggerFlash() }, 140)
+                          if (soundOn) {
+                              val delay = 500L + (Math.random() * 2100).toLong()
+                              h.postDelayed({ sound.volume = vol / 100f; sound.thunder() }, delay)
+                          }
+                      }
+                  }
+              }
+          }
+          BRISTI_EOF
+          mkdir -p bristi-app/app/src/main/java/com/bristi/app
+          cat > bristi-app/app/src/main/java/com/bristi/app/RainSound.kt <<'BRISTI_EOF'
+          package com.bristi.app
+
+          import android.media.AudioAttributes
+          import android.media.AudioFormat
+          import android.media.AudioTrack
+          import kotlin.math.PI
+          import kotlin.math.exp
+          import kotlin.math.max
+          import kotlin.math.min
+          import kotlin.math.sin
+
+          /** বৃষ্টি আর বজ্রের শব্দ কোড দিয়েই তৈরি হয়, আলাদা শব্দ-ফাইল লাগে না। */
+          class RainSound {
+              @Volatile private var running = false
+              @Volatile var level = 0.5f
+              @Volatile var volume = 0.7f
+              private val sr = 22050
+
+              private fun newTrack(bytes: Int): AudioTrack {
+                  return AudioTrack.Builder()
+                      .setAudioAttributes(
+                          AudioAttributes.Builder()
+                              .setUsage(AudioAttributes.USAGE_MEDIA)
+                              .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                              .build()
+                      )
+                      .setAudioFormat(
+                          AudioFormat.Builder()
+                              .setSampleRate(sr)
+                              .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                              .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                              .build()
+                      )
+                      .setBufferSizeInBytes(bytes)
+                      .setTransferMode(AudioTrack.MODE_STREAM)
+                      .build()
+              }
+
+              @Synchronized
+              fun start() {
+                  if (running) return
+                  running = true
+                  val minBuf = AudioTrack.getMinBufferSize(sr, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
+                  val t = newTrack(max(minBuf, 8192))
+                  t.play()
+                  Thread {
+                      val buf = ShortArray(2048)
+                      var lp = 0f
+                      var low = 0f
+                      var tick = 0f
+                      while (running) {
+                          val amp = level * 0.55f
+                          for (i in buf.indices) {
+                              val w = (Math.random() * 2 - 1).toFloat()
+                              lp += 0.25f * (w - lp)
+                              val hiss = w - lp
+                              low = 0.985f * low + 0.015f * w
+                              if (Math.random() < 0.0006 * level) tick = 0.9f
+                              tick *= 0.93f
+                              val v = (hiss * 0.45f + low * 1.35f + tick * w) * amp
+                              buf[i] = (v.coerceIn(-1f, 1f) * 32767f).toInt().toShort()
+                          }
+                          try {
+                              t.setVolume(volume)
+                              t.write(buf, 0, buf.size)
+                          } catch (e: Exception) {
+                              break
+                          }
+                      }
+                      try {
+                          t.stop()
+                      } catch (e: Exception) {
+                      }
+                      t.release()
+                  }.start()
+              }
+
+              @Synchronized
+              fun stop() {
+                  running = false
+              }
+
+              fun thunder() {
+                  Thread {
+                      try {
+                          val n = sr * 4
+                          val buf = ShortArray(n)
+                          var y = 0f
+                          var ph = 0.0
+                          for (i in 0 until n) {
+                              val t = i.toFloat() / sr
+                              val w = (Math.random() * 2 - 1).toFloat()
+                              val a = 0.25f * exp(-t / 0.8f) + 0.015f
+                              y += a * (w - y)
+                              val env = if (t < 0.12f) t / 0.12f else exp(-(t - 0.12f) / 0.9f)
+                              val f = 62f - 28f * min(1f, t / 2.5f)
+                              ph += 2.0 * PI * f / sr
+                              val v = (y * 3.0f + sin(ph).toFloat() * 0.6f) * env * 0.8f
+                              buf[i] = (v.coerceIn(-1f, 1f) * 32767f).toInt().toShort()
+                          }
+                          val tr = newTrack(n * 2)
+                          tr.setVolume(volume)
+                          tr.write(buf, 0, n)
+                          tr.play()
+                          Thread.sleep(4500)
+                          tr.stop()
+                          tr.release()
+                      } catch (e: Exception) {
+                      }
+                  }.start()
+              }
+          }
+          BRISTI_EOF
+          mkdir -p bristi-app/app/src/main/java/com/bristi/app
+          cat > bristi-app/app/src/main/java/com/bristi/app/RainView.kt <<'BRISTI_EOF'
+          package com.bristi.app
+
+          import android.content.Context
+          import android.graphics.Canvas
+          import android.graphics.Color
+          import android.graphics.LinearGradient
+          import android.graphics.Paint
+          import android.graphics.Path
+          import android.graphics.RectF
+          import android.graphics.Shader
+          import android.view.View
+          import kotlin.math.max
+          import kotlin.math.min
+          import kotlin.math.sin
+
+          /** পর্দার ওপরের স্বচ্ছ বৃষ্টির স্তর: কুয়াশা, কাচের গায়ে ফোঁটা, গড়িয়ে নামা দাগ আর বিদ্যুতের ঝলক। */
+          class RainView(ctx: Context) : View(ctx) {
+
+              private class Drop(var x: Float, var y: Float, var r: Float) {
+                  var vy = 0f
+                  var slide = false
+                  var ph = (Math.random() * 6).toFloat()
+                  val tx = FloatArray(16)
+                  val ty = FloatArray(16)
+                  var n = 0
+              }
+
+              private val drops = ArrayList<Drop>()
+              var intensity = 0.6f
+              var raining = false
+              var wet = 0f
+              var flash = 0f
+
+              private val dens = ctx.resources.displayMetrics.density
+              private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+              private val fogPaint = Paint()
+              private val path = Path()
+              private val oval = RectF()
+
+              private fun rnd(a: Float, b: Float): Float = a + Math.random().toFloat() * (b - a)
+
+              override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
+                  fogPaint.shader = LinearGradient(
+                      0f, 0f, 0f, h.toFloat(),
+                      intArrayOf(Color.argb(10, 200, 215, 228), Color.argb(80, 200, 215, 228)),
+                      floatArrayOf(0f, 1f), Shader.TileMode.CLAMP
+                  )
+              }
+
+              fun triggerFlash() {
+                  flash = 0.9f
+              }
+
+              fun step(dt: Float) {
+                  val w = width.toFloat()
+                  val h = height.toFloat()
+                  if (w <= 0f || h <= 0f) return
+                  wet += if (raining) dt / 70f * (0.5f + intensity) else -dt / 45f
+                  wet = wet.coerceIn(0f, 1f)
+                  flash = max(0f, flash - dt * 4f)
+
+                  val maxN = ((22 + 170 * intensity) * (0.35f + 0.65f * wet)).toInt()
+                  if (raining) {
+                      var n = (6 + 46 * intensity) * dt
+                      while (n > 0f) {
+                          if ((n >= 1f || Math.random() < n) && drops.size < maxN) {
+                              val big = Math.random() < 0.12
+                              val r = (if (big) rnd(4.5f, 7f) else rnd(1.4f, 4f)) * dens
+                              drops.add(Drop(rnd(0f, w), rnd(-10f, h), r))
+                          }
+                          n -= 1f
+                      }
+                  }
+                  var i = drops.size - 1
+                  while (i >= 0) {
+                      val d = drops[i]
+                      var remove = false
+                      if (!d.slide) {
+                          if (raining) d.r += dt * 0.12f * (0.5f + intensity) * dens else d.r -= dt * 0.35f * dens
+                          if (d.r > 3.4f * dens && Math.random() < dt * (0.12f + 0.4f * intensity) * (d.r / dens / 4f)) d.slide = true
+                          if (d.r < 0.6f * dens) remove = true
+                      } else {
+                          d.vy += dt * (70f + d.r / dens * 22f) * dens
+                          d.vy = min(d.vy, 260f * dens)
+                          d.y += d.vy * dt
+                          d.x += sin(d.y * 0.05f / dens + d.ph) * 0.25f * dens
+                          d.r -= dt * 0.18f * dens
+                          if (d.n >= d.tx.size) {
+                              for (k in 0 until d.tx.size - 1) {
+                                  d.tx[k] = d.tx[k + 1]
+                                  d.ty[k] = d.ty[k + 1]
+                              }
+                              d.n = d.tx.size - 1
+                          }
+                          d.tx[d.n] = d.x
+                          d.ty[d.n] = d.y
+                          d.n++
+                          if (d.r < 1.8f * dens && Math.random() < 0.05) d.slide = false
+                          if (d.y > h + 30f * dens || d.r < 0.7f * dens) remove = true
+                      }
+                      if (remove) drops.removeAt(i)
+                      i--
+                  }
+              }
+
+              override fun onDraw(c: Canvas) {
+                  val w = width.toFloat()
+                  val h = height.toFloat()
+                  if (wet > 0.01f) {
+                      fogPaint.alpha = (255 * min(1f, 0.1f + wet * 0.9f)).toInt()
+                      c.drawRect(0f, 0f, w, h, fogPaint)
+                      paint.style = Paint.Style.FILL
+                      paint.color = Color.argb((wet * 45).toInt(), 20, 35, 50)
+                      c.drawRect(0f, 0f, w, h, paint)
+                  }
+                  for (d in drops) {
+                      if (d.slide && d.n > 3) {
+                          path.reset()
+                          path.moveTo(d.tx[0], d.ty[0])
+                          for (k in 1 until d.n) path.lineTo(d.tx[k], d.ty[k])
+                          paint.style = Paint.Style.STROKE
+                          paint.strokeCap = Paint.Cap.ROUND
+                          paint.strokeWidth = max(1f * dens, d.r * 0.55f)
+                          paint.color = Color.argb(40, 235, 245, 255)
+                          c.drawPath(path, paint)
+                      }
+                      val rx = d.r
+                      val ry = d.r * (if (d.slide) 1.35f else 1.08f)
+                      oval.set(d.x - rx, d.y - ry, d.x + rx, d.y + ry)
+                      paint.style = Paint.Style.FILL
+                      paint.color = Color.argb(36, 225, 238, 250)
+                      c.drawOval(oval, paint)
+                      paint.style = Paint.Style.STROKE
+                      paint.strokeWidth = 1.1f * dens
+                      paint.color = Color.argb(107, 20, 36, 52)
+                      c.drawArc(oval, 10f, 160f, false, paint)
+                      paint.color = Color.argb(140, 255, 255, 255)
+                      c.drawArc(oval, 190f, 160f, false, paint)
+                      paint.style = Paint.Style.FILL
+                      paint.color = Color.argb(215, 255, 255, 255)
+                      c.drawCircle(d.x - rx * 0.35f, d.y - ry * 0.4f, max(0.6f * dens, rx * 0.22f), paint)
+                  }
+                  if (flash > 0.01f) {
+                      paint.style = Paint.Style.FILL
+                      paint.color = Color.argb((flash * 200).toInt(), 232, 238, 255)
+                      c.drawRect(0f, 0f, w, h, paint)
+                  }
+              }
+          }
+          BRISTI_EOF
+          mkdir -p bristi-app/app/src/main/res/drawable
+          cat > bristi-app/app/src/main/res/drawable/ic_launcher_background.xml <<'BRISTI_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path
+                  android:fillColor="#1F3A55"
+                  android:pathData="M0,0h108v108h-108z" />
+          </vector>
+          BRISTI_EOF
+          mkdir -p bristi-app/app/src/main/res/drawable
+          cat > bristi-app/app/src/main/res/drawable/ic_launcher_foreground.xml <<'BRISTI_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path
+                  android:fillColor="#E6EEF5"
+                  android:pathData="M32,58 C24,58 24,44 34,44 C36,34 52,32 56,42 C68,38 76,52 66,58 Z" />
+              <path
+                  android:fillColor="#59A8E6"
+                  android:pathData="M38,64 L41,64 L37,76 L34,76 Z M52,64 L55,64 L51,76 L48,76 Z M66,64 L69,64 L65,76 L62,76 Z" />
+          </vector>
+          BRISTI_EOF
+          mkdir -p bristi-app/app/src/main/res/mipmap-anydpi-v26
+          cat > bristi-app/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml <<'BRISTI_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@drawable/ic_launcher_background" />
+              <foreground android:drawable="@drawable/ic_launcher_foreground" />
+          </adaptive-icon>
+          BRISTI_EOF
+          mkdir -p bristi-app/app/src/main/res/mipmap-anydpi-v26
+          cat > bristi-app/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml <<'BRISTI_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@drawable/ic_launcher_background" />
+              <foreground android:drawable="@drawable/ic_launcher_foreground" />
+          </adaptive-icon>
+          BRISTI_EOF
+          mkdir -p bristi-app/app/src/main/res/values
+          cat > bristi-app/app/src/main/res/values/strings.xml <<'BRISTI_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">বৃষ্টি-ফোন</string>
+          </resources>
+          BRISTI_EOF
+          cat > bristi-app/build.gradle.kts <<'BRISTI_EOF'
+          plugins {
+              id("com.android.application") version "8.5.2" apply false
+              id("org.jetbrains.kotlin.android") version "1.9.24" apply false
+          }
+          BRISTI_EOF
+          cat > bristi-app/gradle.properties <<'BRISTI_EOF'
+          org.gradle.jvmargs=-Xmx2g -Dfile.encoding=UTF-8
+          android.nonTransitiveRClass=true
+          kotlin.code.style=official
+          BRISTI_EOF
+          cat > bristi-app/settings.gradle.kts <<'BRISTI_EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "Bristi"
+          include(":app")
+          BRISTI_EOF
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.7
+
+      - name: Build debug APK
+        working-directory: bristi-app
+        run: gradle assembleDebug --no-daemon
+
+      - name: Rename APK
+        run: cp bristi-app/app/build/outputs/apk/debug/app-debug.apk bristi.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bristi-apk
+          path: bristi.apk
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: bristi-v${{ github.run_number }}
+          name: বৃষ্টি-ফোন v${{ github.run_number }}
+          files: bristi.apk
