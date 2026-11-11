@@ -105,7 +105,7 @@ jobs:
           h1{font-size:21px;margin:0;font-weight:700}
           .user{font-family:var(--f-num);font-size:13px;color:var(--mute);background:var(--panel);border:1px solid var(--line);border-radius:99px;padding:3px 11px;white-space:nowrap}
           .tabs{display:flex;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:4px;margin-bottom:12px}
-          .tabs button{flex:1;border:0;background:none;padding:8px;border-radius:9px;font-weight:600;color:var(--mute)}
+          .tabs button{flex:1;border:0;background:none;padding:8px 2px;border-radius:9px;font-weight:600;font-size:13.5px;white-space:nowrap;color:var(--mute)}
           .tabs button.on{background:var(--accent);color:var(--accent-fg)}
           .note{font-size:12.5px;color:var(--mute);background:var(--panel);border:1px dashed var(--line);border-radius:10px;padding:8px 11px;margin-bottom:12px}
           .sync{display:flex;gap:8px;margin-bottom:12px}
@@ -136,8 +136,8 @@ jobs:
           .n{font-family:var(--f-num);font-weight:700}.s{font-family:var(--f-num);font-size:13.5px;color:var(--mute)}
           .bar{position:sticky;bottom:0;padding:12px 0 calc(12px + env(safe-area-inset-bottom,0px));background:linear-gradient(transparent,var(--bg) 30%)}
           .bar .btn{width:100%;padding:13px;font-size:16px}
-          .board{width:100%;aspect-ratio:1;display:grid;grid-template-columns:repeat(8,1fr);border-radius:8px;overflow:hidden;border:1px solid var(--line);user-select:none;-webkit-user-select:none;touch-action:manipulation}
-          .sq{position:relative;display:grid;place-items:center;background:var(--bsq-l);cursor:pointer;min-width:0}
+          .board{width:100%;aspect-ratio:1;display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);border-radius:8px;overflow:hidden;border:1px solid var(--line);user-select:none;-webkit-user-select:none;touch-action:manipulation}
+          .sq{position:relative;display:grid;place-items:center;background:var(--bsq-l);cursor:pointer;min-width:0;min-height:0;overflow:hidden}
           .sq.d{background:var(--bsq-d)}
           .sq.sel::after,.sq.hint::after,.sq.ok::after,.sq.no::after,.sq.last::after{content:"";position:absolute;inset:0}
           .sq.sel::after{background:var(--sel)}.sq.hint::after{background:var(--hint)}.sq.last::after{background:#f2c94c55}
@@ -152,7 +152,7 @@ jobs:
           :root[data-board="blue"]{--bsq-l:#3f6fc9;--bsq-d:#32439d;--sel:#f2c94cbb}
           :root[data-board="green"]{--bsq-l:#86bd47;--bsq-d:#5d8c34;--sel:#f2e04cbb}
           :root[data-board="red"]{--bsq-l:#c4413f;--bsq-d:#9d2d2c;--sel:#f2c94cbb}
-          .pc{display:block;width:94%;height:94%;position:relative;z-index:1}
+          .pc{display:block;position:absolute;left:3%;top:3%;width:94%;height:94%;z-index:1}
           .pc{pointer-events:none}
           .bsw{display:flex;align-items:center;gap:8px;margin:-2px 0 12px;font-size:12.5px;color:var(--mute)}
           .bsw button{width:26px;height:26px;border-radius:50%;border:2px solid var(--line);padding:0}
