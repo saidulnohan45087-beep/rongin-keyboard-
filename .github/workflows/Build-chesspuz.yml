@@ -1,0 +1,955 @@
+name: Build Chess Puzzle APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/build-chesspuz.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write project files
+        run: |
+          mkdir -p chesspuz-app
+          mkdir -p chesspuz-app/app
+          cat > chesspuz-app/app/build.gradle.kts <<'PATH_EOF'
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+          }
+
+          android {
+              namespace = "com.chesspuz.app"
+              compileSdk = 34
+
+              defaultConfig {
+                  applicationId = "com.chesspuz.app"
+                  minSdk = 26
+                  targetSdk = 34
+                  versionCode = 1
+                  versionName = "1.0"
+              }
+
+              buildTypes {
+                  release {
+                      isMinifyEnabled = false
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+          }
+
+          dependencies {
+              implementation("androidx.webkit:webkit:1.11.0")
+          }
+          PATH_EOF
+          mkdir -p chesspuz-app/app/src/main
+          cat > chesspuz-app/app/src/main/AndroidManifest.xml <<'PATH_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <uses-permission android:name="android.permission.INTERNET" />
+
+              <application
+                  android:allowBackup="false"
+                  android:hardwareAccelerated="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:roundIcon="@mipmap/ic_launcher_round"
+                  android:label="@string/app_name"
+                  android:theme="@android:style/Theme.Material.NoActionBar">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
+                      android:windowSoftInputMode="adjustResize">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          PATH_EOF
+          mkdir -p chesspuz-app/app/src/main/assets
+          cat > chesspuz-app/app/src/main/assets/index.html <<'PATH_EOF'
+          <!doctype html>
+          <html lang="bn"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body>
+          <title>দাবা পাজল</title>
+          <meta name="claude:viewport-fit-sides" content="cover">
+          <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap">
+          <style>
+          /* Layout: one-column phone app, top tabs (খেলা / ভিশন), full-width board, sticky action bar */
+          :root{--bg:#f3f1ec;--panel:#fffefb;--line:#ddd8cc;--fg:#1d2320;--mute:#6b726c;--accent:#2f6b4f;--accent-fg:#fff;--bsq-l:#ecdfc0;--bsq-d:#7d9a6e;--good:#2e8b57;--bad:#c0452f;--warn:#b7791f;--sel:#f2c94c99;--hint:#4f8fd9aa;
+          --f-body:'Hind Siliguri',system-ui,-apple-system,'Noto Sans Bengali',sans-serif;--f-num:'Space Grotesk','Hind Siliguri',system-ui,sans-serif}
+          @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141916;--panel:#1c231f;--line:#2e3832;--fg:#e8ece7;--mute:#92a098;--accent:#6fcf9b;--accent-fg:#0f1a14;--bsq-l:#d9ccaa;--bsq-d:#6c8860;--good:#5cc98a;--bad:#ef7a64;--warn:#e0b04c;color-scheme:dark}}
+          :root[data-theme="dark"]{--bg:#141916;--panel:#1c231f;--line:#2e3832;--fg:#e8ece7;--mute:#92a098;--accent:#6fcf9b;--accent-fg:#0f1a14;--bsq-l:#d9ccaa;--bsq-d:#6c8860;--good:#5cc98a;--bad:#ef7a64;--warn:#e0b04c;color-scheme:dark}
+          *{box-sizing:border-box}
+          body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.45;padding-block:0 24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+          .app{max-width:520px;margin:0 auto}
+          button{font:inherit;color:inherit;cursor:pointer}
+          button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+          header{display:flex;align-items:center;justify-content:space-between;padding:14px 0 8px;gap:12px}
+          h1{font-size:21px;margin:0;font-weight:700}
+          .user{font-family:var(--f-num);font-size:13px;color:var(--mute);background:var(--panel);border:1px solid var(--line);border-radius:99px;padding:3px 11px;white-space:nowrap}
+          .tabs{display:flex;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:4px;margin-bottom:12px}
+          .tabs button{flex:1;border:0;background:none;padding:8px;border-radius:9px;font-weight:600;color:var(--mute)}
+          .tabs button.on{background:var(--accent);color:var(--accent-fg)}
+          .note{font-size:12.5px;color:var(--mute);background:var(--panel);border:1px dashed var(--line);border-radius:10px;padding:8px 11px;margin-bottom:12px}
+          .sync{display:flex;gap:8px;margin-bottom:12px}
+          .sync input{flex:1;min-width:0;font:inherit;font-family:var(--f-num);background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:9px 11px}
+          .btn{background:var(--accent);color:var(--accent-fg);border:0;border-radius:10px;padding:9px 15px;font-weight:600}
+          .btn.ghost{background:var(--panel);color:var(--fg);border:1px solid var(--line)}
+          .btn[disabled]{opacity:.45;cursor:default}
+          .list{display:flex;flex-direction:column;gap:8px}
+          .game{display:grid;grid-template-columns:auto 1fr auto;gap:2px 12px;align-items:center;text-align:left;width:100%;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px 13px}
+          .dot{grid-row:span 2;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:13px;color:#fff}
+          .dot.win{background:var(--good)}.dot.loss{background:var(--bad)}.dot.draw{background:var(--mute)}
+          .g-t{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+          .g-s{font-size:12.5px;color:var(--mute);grid-column:2}
+          .cnt{grid-row:span 2;text-align:right;font-family:var(--f-num);font-weight:700;font-size:19px;line-height:1.1}
+          .cnt small{display:block;font-family:var(--f-body);font-weight:400;font-size:11.5px;color:var(--mute)}
+          .back{background:none;border:0;color:var(--mute);padding:4px 0;font-weight:600;margin-bottom:6px}
+          h2{font-size:18px;margin:2px 0 2px}
+          .sub{color:var(--mute);font-size:13px;margin-bottom:10px}
+          .th-head,.th{display:grid;grid-template-columns:28px 1fr 44px 64px;gap:8px;align-items:center;padding:10px 12px}
+          .th-head{font-size:11.5px;color:var(--mute);text-transform:uppercase;letter-spacing:.06em;padding-block:0 6px}
+          .th-head span:nth-child(n+3),.th .n,.th .s{text-align:right}
+          .box{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+          .th{width:100%;border:0;border-top:1px solid var(--line);background:none;text-align:left}
+          .th:first-child{border-top:0}
+          .ck{width:22px;height:22px;border:2px solid var(--mute);border-radius:6px;display:grid;place-items:center;font-size:14px;color:var(--accent-fg)}
+          .on .ck{background:var(--accent);border-color:var(--accent)}
+          .th .nm{font-weight:600}.th .nm small{display:block;font-weight:400;font-size:12px;color:var(--mute)}
+          .n{font-family:var(--f-num);font-weight:700}.s{font-family:var(--f-num);font-size:13.5px;color:var(--mute)}
+          .bar{position:sticky;bottom:0;padding:12px 0 calc(12px + env(safe-area-inset-bottom,0px));background:linear-gradient(transparent,var(--bg) 30%)}
+          .bar .btn{width:100%;padding:13px;font-size:16px}
+          .board{width:100%;aspect-ratio:1;display:grid;grid-template-columns:repeat(8,1fr);border-radius:8px;overflow:hidden;border:1px solid var(--line);user-select:none;-webkit-user-select:none;touch-action:manipulation}
+          .sq{position:relative;display:grid;place-items:center;background:var(--bsq-l);cursor:pointer;min-width:0}
+          .sq.d{background:var(--bsq-d)}
+          .sq.sel::after,.sq.hint::after,.sq.ok::after,.sq.no::after,.sq.last::after{content:"";position:absolute;inset:0}
+          .sq.sel::after{background:var(--sel)}.sq.hint::after{background:var(--hint)}.sq.last::after{background:#f2c94c55}
+          .sq.ok::after{background:#2e8b57cc}.sq.no::after{background:#c0452fcc}
+          .sq.dst::before{content:"";position:absolute;width:30%;height:30%;border-radius:50%;background:#1d232044;z-index:2}
+          .pc{position:relative;z-index:1;font-size:min(10.2vw,50px);line-height:1;font-family:'Segoe UI Symbol','Noto Sans Symbols 2','DejaVu Sans',sans-serif}
+          .pc.w{color:#fff;text-shadow:0 0 1px #000,0 0 1px #000,0 1px 1px #000a,1px 0 0 #000,-1px 0 0 #000,0 -1px 0 #000}
+          .pc.b{color:#1a1a1a;text-shadow:0 0 1px #fff8}
+          .co{position:absolute;font-family:var(--f-num);font-size:10px;font-weight:700;opacity:.8;z-index:3;color:#1d2320}
+          .co.f{right:3px;bottom:1px}.co.r{left:3px;top:1px}
+          :root[data-board="purple"]{--bsq-l:#a2a3d9;--bsq-d:#533ad4;--sel:#e890e8bb;--bpick:#a2a3d9}
+          :root[data-board="blue"]{--bsq-l:#3f6fc9;--bsq-d:#32439d;--sel:#f2c94cbb}
+          :root[data-board="green"]{--bsq-l:#86bd47;--bsq-d:#5d8c34;--sel:#f2e04cbb}
+          :root[data-board="red"]{--bsq-l:#c4413f;--bsq-d:#9d2d2c;--sel:#f2c94cbb}
+          .pc{display:block;width:94%;height:94%;position:relative;z-index:1}
+          .pc{pointer-events:none}
+          .bsw{display:flex;align-items:center;gap:8px;margin:-2px 0 12px;font-size:12.5px;color:var(--mute)}
+          .bsw button{width:26px;height:26px;border-radius:50%;border:2px solid var(--line);padding:0}
+          .bsw button.on{border-color:var(--fg);box-shadow:0 0 0 2px var(--bg) inset}
+          .poster{display:block;width:100%;max-height:70vh;object-fit:contain;background:#0002;border-radius:10px;border:1px solid var(--line);cursor:zoom-in}
+          .art{display:grid;grid-template-columns:96px 1fr;gap:12px;text-align:left;width:100%;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;align-items:center}
+          .art img{width:96px;height:120px;object-fit:cover;border-radius:8px;background:#0002}
+          .art .g-t{white-space:normal;font-size:16px}
+          .body p{margin:0 0 12px;font-size:16px;line-height:1.7}
+          .field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;font-size:13px;color:var(--mute)}
+          .field input[type=text],.field textarea{font:inherit;font-size:15px;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 11px;width:100%}
+          .field textarea{min-height:200px;resize:vertical;line-height:1.6}
+          .zoom{position:fixed;inset:0;z-index:50;background:#000d;display:grid;place-items:center;padding:12px;cursor:zoom-out}
+          .zoom img{max-width:100%;max-height:100%;object-fit:contain}
+          .btn.del{background:none;border:1px solid var(--bad);color:var(--bad)}
+          .progress{height:8px;border-radius:99px;background:var(--line);overflow:hidden;margin-top:14px}.progress i{display:block;height:100%;background:var(--accent);transition:width .3s}
+          .shake{animation:sh .3s}
+          @keyframes sh{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+          @media (prefers-reduced-motion:reduce){.shake{animation:none}}
+          .status{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:0 0 8px;font-size:13.5px}
+          .chips{display:flex;gap:6px;flex-wrap:wrap}
+          .chip{font-size:11.5px;font-weight:600;padding:2px 9px;border-radius:99px;background:var(--panel);border:1px solid var(--line);color:var(--mute)}
+          .chip.miss{color:var(--bad);border-color:var(--bad)}.chip.got{color:var(--good);border-color:var(--good)}
+          .msg{min-height:44px;margin:10px 0;padding:9px 12px;border-radius:10px;background:var(--panel);border:1px solid var(--line);font-weight:500}
+          .msg.good{border-color:var(--good);color:var(--good)}.msg.bad{border-color:var(--bad);color:var(--bad)}
+          .row{display:flex;gap:8px}.row .btn{flex:1}
+          .seg{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+          .seg button{border:1px solid var(--line);background:var(--panel);border-radius:99px;padding:5px 13px;font-size:13.5px;font-weight:500}
+          .seg button.on{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+          .hud{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+          .hud div{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px 10px;text-align:center}
+          .hud b{display:block;font-family:var(--f-num);font-size:22px;line-height:1.2}.hud span{font-size:11.5px;color:var(--mute)}
+          .target{font-family:var(--f-num);font-weight:700;font-size:46px;text-align:center;line-height:1.1;margin:2px 0 8px}
+          .target small{display:block;font-family:var(--f-body);font-size:13px;font-weight:400;color:var(--mute)}
+          .opts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+          .opts button{font-family:var(--f-num);font-weight:700;font-size:22px;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--panel)}
+          .opts button.ok{background:var(--good);color:#fff}.opts button.no{background:var(--bad);color:#fff}
+          .res{text-align:center;padding:22px 14px}
+          .res .big{font-family:var(--f-num);font-size:52px;font-weight:700;line-height:1}
+          .pb{color:var(--warn);font-weight:700}
+          .tgl{display:flex;align-items:center;gap:8px;font-size:13.5px;margin:10px 0 0;color:var(--mute)}
+          </style>
+          <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+          <symbol id="s-P" viewBox="0 0 100 100"><g style="fill:var(--pf);stroke:var(--ps);stroke-width:3;stroke-linejoin:round;stroke-linecap:round"><circle cx="50" cy="27" r="13"/><rect x="37" y="39" width="26" height="8" rx="4"/><path d="M42 47H58C58 58 64 65 67 73H33C36 65 42 58 42 47Z"/><path d="M21 91Q21 82 30 82H70Q79 82 79 91Z"/><rect x="29" y="73" width="42" height="10" rx="5"/></g></symbol>
+          <symbol id="s-R" viewBox="0 0 100 100"><g style="fill:var(--pf);stroke:var(--ps);stroke-width:3;stroke-linejoin:round;stroke-linecap:round"><path d="M27 12H40V22H45V12H55V22H60V12H73V32Q73 36 69 38L66 41V63L70 73H30L34 63V41L31 38Q27 36 27 32Z"/><path d="M34 52H66" fill="none"/><path d="M21 91Q21 82 30 82H70Q79 82 79 91Z"/><rect x="29" y="73" width="42" height="10" rx="5"/></g></symbol>
+          <symbol id="s-N" viewBox="0 0 100 100"><g style="fill:var(--pf);stroke:var(--ps);stroke-width:3;stroke-linejoin:round;stroke-linecap:round"><path d="M30 73C29 58 33 48 43 40C37 40 33 42 29 46C25 50 20 49 19 44C19 36 28 25 38 19L40 8L48 15C51 14 54 14 56 15L63 8L65 19C74 27 76 42 73 56L71 73Z"/><circle cx="46" cy="27" r="3" style="fill:var(--ps)"/><circle cx="23" cy="43" r="2" style="fill:var(--ps)"/><path d="M56 22C62 30 63 42 60 52" fill="none"/><path d="M21 91Q21 82 30 82H70Q79 82 79 91Z"/><rect x="29" y="73" width="42" height="10" rx="5"/></g></symbol>
+          <symbol id="s-B" viewBox="0 0 100 100"><g style="fill:var(--pf);stroke:var(--ps);stroke-width:3;stroke-linejoin:round;stroke-linecap:round"><circle cx="50" cy="11" r="5"/><path d="M50 17C63 26 67 38 61 48C59 51 58 52 58 54H42C42 52 41 51 39 48C33 38 37 26 50 17Z"/><path d="M49 28L57 37" fill="none"/><rect x="37" y="54" width="26" height="7" rx="3.5"/><path d="M42 61H58L65 73H35Z"/><path d="M21 91Q21 82 30 82H70Q79 82 79 91Z"/><rect x="29" y="73" width="42" height="10" rx="5"/></g></symbol>
+          <symbol id="s-Q" viewBox="0 0 100 100"><g style="fill:var(--pf);stroke:var(--ps);stroke-width:3;stroke-linejoin:round;stroke-linecap:round"><path d="M31 73L23 36L32 54L37 29L44 52L50 24L56 52L63 29L68 54L77 36L69 73Z"/><circle cx="23" cy="32" r="4.5"/><circle cx="37" cy="25" r="4.5"/><circle cx="50" cy="20" r="4.5"/><circle cx="63" cy="25" r="4.5"/><circle cx="77" cy="32" r="4.5"/><path d="M21 91Q21 82 30 82H70Q79 82 79 91Z"/><rect x="29" y="73" width="42" height="10" rx="5"/></g></symbol>
+          <symbol id="s-K" viewBox="0 0 100 100"><g style="fill:var(--pf);stroke:var(--ps);stroke-width:3;stroke-linejoin:round;stroke-linecap:round"><path d="M47 5H53V11H59V17H53V23H47V17H41V11H47Z"/><path d="M50 25C66 29 75 45 70 61C69 65 68 69 68 73H32C32 69 31 65 30 61C25 45 34 29 50 25Z"/><path d="M33 58H67" fill="none"/><path d="M21 91Q21 82 30 82H70Q79 82 79 91Z"/><rect x="29" y="73" width="42" height="10" rx="5"/></g></symbol>
+          </defs></svg>
+          <div class="app" id="app"></div>
+          <div class="app" style="font-size:11.5px;color:var(--mute);text-align:center;padding:14px 0">চেসপিস: California, Jerry S. (CC BY-NC-SA 4.0)</div>
+          <script>var Core = (function () {
+            var P = 1, N = 2, B = 3, R = 4, Q = 5, K = 6;
+            var VAL = [0, 100, 320, 330, 500, 900, 0];
+            var FILES = "abcdefgh";
+            var KN = [[1, 2], [2, 1], [2, -1], [1, -2], [-1, -2], [-2, -1], [-2, 1], [-1, 2]];
+            var KD = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+            var MASK = new Int8Array(64); MASK[0] = 2; MASK[7] = 1; MASK[56] = 8; MASK[63] = 4; MASK[4] = 3; MASK[60] = 12;
+            function sqName(s) { return FILES[s & 7] + ((s >> 3) + 1); }
+            function sqOf(n) { return (n.charCodeAt(1) - 49) * 8 + (n.charCodeAt(0) - 97); }
+            function Pos() { this.b = new Int8Array(64); this.turn = 1; this.cast = 0; this.ep = -1; this.half = 0; this.full = 1; this.hist = []; this.ks = [4, 60]; }
+            var LET = { p: 1, n: 2, b: 3, r: 4, q: 5, k: 6 };
+            Pos.prototype.setFen = function (fen) {
+              var pt = fen.split(" "), rows = pt[0].split("/"); this.b.fill(0); this.hist = [];
+              for (var r = 0; r < 8; r++) { var f = 0, row = rows[r], rank = 7 - r;
+                for (var i = 0; i < row.length; i++) { var c = row[i];
+                  if (c >= "1" && c <= "8") f += +c; else { var lo = c.toLowerCase(), v = LET[lo]; this.b[rank * 8 + f] = c === lo ? -v : v; if (v === 6) this.ks[c === lo ? 1 : 0] = rank * 8 + f; f++; } } }
+              this.turn = pt[1] === "b" ? -1 : 1; this.cast = 0; var cs = pt[2] || "-";
+              if (cs.indexOf("K") >= 0) this.cast |= 1; if (cs.indexOf("Q") >= 0) this.cast |= 2; if (cs.indexOf("k") >= 0) this.cast |= 4; if (cs.indexOf("q") >= 0) this.cast |= 8;
+              this.ep = pt[3] && pt[3] !== "-" ? sqOf(pt[3]) : -1; this.half = +(pt[4] || 0); this.full = +(pt[5] || 1); return this;
+            };
+            Pos.prototype.fen = function () {
+              var s = "", L = " PNBRQK";
+              for (var r = 7; r >= 0; r--) { var e = 0; for (var f = 0; f < 8; f++) { var p = this.b[r * 8 + f]; if (!p) e++; else { if (e) { s += e; e = 0; } var ch = L[Math.abs(p)]; s += p > 0 ? ch : ch.toLowerCase(); } } if (e) s += e; if (r) s += "/"; }
+              var c = (this.cast & 1 ? "K" : "") + (this.cast & 2 ? "Q" : "") + (this.cast & 4 ? "k" : "") + (this.cast & 8 ? "q" : "");
+              return s + " " + (this.turn === 1 ? "w" : "b") + " " + (c || "-") + " " + (this.ep >= 0 ? sqName(this.ep) : "-") + " " + this.half + " " + this.full;
+            };
+            Pos.prototype.isAttacked = function (sq, by) {
+              var b = this.b, f = sq & 7, r = sq >> 3, i, nf, nr, p, d;
+              for (i = -1; i <= 1; i += 2) { nf = f + i; nr = r - by; if (nf >= 0 && nf < 8 && nr >= 0 && nr < 8 && b[nr * 8 + nf] === by * P) return true; }
+              for (i = 0; i < 8; i++) { nf = f + KN[i][0]; nr = r + KN[i][1]; if (nf >= 0 && nf < 8 && nr >= 0 && nr < 8 && b[nr * 8 + nf] === by * N) return true; }
+              for (i = 0; i < 8; i++) { nf = f + KD[i][0]; nr = r + KD[i][1]; if (nf >= 0 && nf < 8 && nr >= 0 && nr < 8 && b[nr * 8 + nf] === by * K) return true; }
+              for (d = 0; d < 8; d++) { nf = f + KD[d][0]; nr = r + KD[d][1]; var diag = d >= 4;
+                while (nf >= 0 && nf < 8 && nr >= 0 && nr < 8) { p = b[nr * 8 + nf]; if (p) { if (p * by > 0) { var t = p * by; if (t === Q || (diag ? t === B : t === R)) return true; } break; } nf += KD[d][0]; nr += KD[d][1]; } }
+              return false;
+            };
+            Pos.prototype.inCheck = function (c) { return this.isAttacked(this.ks[c === 1 ? 0 : 1], -c); };
+            Pos.prototype.gen = function (capOnly) {
+              var b = this.b, me = this.turn, out = [], sq, f, r, i, nf, nr, to, p, t, d;
+              function add(fr, to, pr, fl) { out.push(fr | (to << 6) | (pr << 12) | (fl << 15)); }
+              for (sq = 0; sq < 64; sq++) { p = b[sq]; if (p * me <= 0) continue; t = p * me; f = sq & 7; r = sq >> 3;
+                if (t === P) {
+                  var fwd = sq + 8 * me, prRank = me === 1 ? 7 : 0, st = me === 1 ? 1 : 6;
+                  if (b[fwd] === 0) {
+                    if ((fwd >> 3) === prRank) { add(sq, fwd, Q, 0); if (!capOnly) { add(sq, fwd, R, 0); add(sq, fwd, B, 0); add(sq, fwd, N, 0); } }
+                    else if (!capOnly) { add(sq, fwd, 0, 0); if (r === st && b[fwd + 8 * me] === 0) add(sq, fwd + 8 * me, 0, 4); }
+                  }
+                  for (i = -1; i <= 1; i += 2) { nf = f + i; if (nf < 0 || nf > 7) continue; to = fwd + i;
+                    if (b[to] * me < 0) { if ((to >> 3) === prRank) { add(sq, to, Q, 8); if (!capOnly) { add(sq, to, R, 8); add(sq, to, B, 8); add(sq, to, N, 8); } } else add(sq, to, 0, 8); }
+                    else if (to === this.ep) add(sq, to, 0, 9); }
+                } else if (t === N || t === K) {
+                  var arr = t === N ? KN : KD;
+                  for (i = 0; i < 8; i++) { nf = f + arr[i][0]; nr = r + arr[i][1]; if (nf < 0 || nf > 7 || nr < 0 || nr > 7) continue; to = nr * 8 + nf;
+                    if (b[to] * me > 0) continue; if (b[to]) add(sq, to, 0, 8); else if (!capOnly) add(sq, to, 0, 0); }
+                  if (t === K && !capOnly) {
+                    var home = me === 1 ? 4 : 60, ks = me === 1 ? 1 : 4, qs = me === 1 ? 2 : 8;
+                    if (sq === home && !this.isAttacked(home, -me)) {
+                      if ((this.cast & ks) && b[home + 1] === 0 && b[home + 2] === 0 && b[home + 3] === me * R && !this.isAttacked(home + 1, -me)) add(sq, home + 2, 0, 2);
+                      if ((this.cast & qs) && b[home - 1] === 0 && b[home - 2] === 0 && b[home - 3] === 0 && b[home - 4] === me * R && !this.isAttacked(home - 1, -me)) add(sq, home - 2, 0, 2);
+                    }
+                  }
+                } else {
+                  for (d = (t === B ? 4 : 0); d < (t === R ? 4 : 8); d++) { nf = f + KD[d][0]; nr = r + KD[d][1];
+                    while (nf >= 0 && nf < 8 && nr >= 0 && nr < 8) { to = nr * 8 + nf; if (b[to] * me > 0) break; if (b[to]) { add(sq, to, 0, 8); break; } if (!capOnly) add(sq, to, 0, 0); nf += KD[d][0]; nr += KD[d][1]; } }
+                }
+              }
+              return out;
+            };
+            Pos.prototype.make = function (m) {
+              var b = this.b, f = m & 63, t = (m >> 6) & 63, pr = (m >> 12) & 7, fl = m >> 15, p = b[f], me = this.turn, cap = b[t];
+              var h = [m, cap, this.cast, this.ep, this.half, this.ks[0], this.ks[1]]; this.hist.push(h);
+              b[f] = 0; b[t] = pr ? pr * me : p;
+              if (fl & 1) { b[t - 8 * me] = 0; h[1] = -me * P; }
+              if (fl & 2) { if (t > f) { b[f + 1] = b[f + 3]; b[f + 3] = 0; } else { b[f - 1] = b[f - 4]; b[f - 4] = 0; } }
+              if (Math.abs(p) === K) this.ks[me === 1 ? 0 : 1] = t;
+              this.cast &= ~(MASK[f] | MASK[t]);
+              this.ep = (fl & 4) ? (f + t) >> 1 : -1;
+              this.half = (Math.abs(p) === P || cap || (fl & 1)) ? 0 : this.half + 1; if (me === -1) this.full++; this.turn = -me;
+            };
+            Pos.prototype.unmake = function () {
+              var h = this.hist.pop(), m = h[0], f = m & 63, t = (m >> 6) & 63, fl = m >> 15, b = this.b; this.turn = -this.turn; var me = this.turn;
+              var pr = (m >> 12) & 7; b[f] = pr ? me * P : b[t]; b[t] = h[1];
+              if (fl & 1) { b[t] = 0; b[t - 8 * me] = h[1]; }
+              if (fl & 2) { if (t > f) { b[f + 3] = b[f + 1]; b[f + 1] = 0; } else { b[f - 4] = b[f - 1]; b[f - 1] = 0; } }
+              this.cast = h[2]; this.ep = h[3]; this.half = h[4]; this.ks[0] = h[5]; this.ks[1] = h[6]; if (me === -1) this.full--;
+            };
+            Pos.prototype.legal = function () {
+              var ps = this.gen(false), out = [], me = this.turn;
+              for (var i = 0; i < ps.length; i++) { this.make(ps[i]); if (!this.inCheck(me)) out.push(ps[i]); this.unmake(); }
+              return out;
+            };
+            function uci(m) { var s = sqName(m & 63) + sqName((m >> 6) & 63), pr = (m >> 12) & 7; return s + (pr ? " pnbrqk"[pr] : ""); }
+            Pos.prototype.parse = function (u) { var ms = this.legal(); for (var i = 0; i < ms.length; i++) if (uci(ms[i]) === u) return ms[i]; return 0; };
+            Pos.prototype.san = function (m, legal) {
+              var b = this.b, f = m & 63, t = (m >> 6) & 63, pr = (m >> 12) & 7, fl = m >> 15, p = Math.abs(b[f]), s;
+              if (fl & 2) s = t > f ? "O-O" : "O-O-O";
+              else {
+                s = ""; if (p !== P) { s += " PNBRQK"[p]; var amb = false, sf = false, sr = false; legal = legal || this.legal();
+                  for (var i = 0; i < legal.length; i++) { var o = legal[i]; if (o === m) continue; if (((o >> 6) & 63) === t && Math.abs(b[o & 63]) === p) { amb = true; if ((o & 7) === (f & 7)) sf = true; if ((o >> 3 & 7) === (f >> 3)) sr = true; } }
+                  if (amb) { if (!sf) s += FILES[f & 7]; else if (!sr) s += (f >> 3) + 1; else s += FILES[f & 7] + ((f >> 3) + 1); } }
+                if (fl & 8) { if (p === P) s += FILES[f & 7]; s += "x"; }
+                s += sqName(t); if (pr) s += "=" + " PNBRQK"[pr];
+              }
+              var me = this.turn; this.make(m); if (this.inCheck(-me)) s += this.legal().length ? "+" : "#"; this.unmake(); return s;
+            };
+            Pos.prototype.perft = function (d) { if (d === 0) return 1; var ms = this.legal(), n = 0; if (d === 1) return ms.length; for (var i = 0; i < ms.length; i++) { this.make(ms[i]); n += this.perft(d - 1); this.unmake(); } return n; };
+            var START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+            return { Pos: Pos, uci: uci, sqName: sqName, sqOf: sqOf, VAL: VAL, START: START, P: P, N: N, B: B, R: R, Q: Q, K: K, KN: KN, KD: KD };
+          })();
+          if (typeof module !== "undefined") module.exports = Core;
+          </script>
+          <script>
+          var GAMES=[];var PIMG={};['wP','wN','wB','wR','wQ','wK','bP','bN','bB','bR','bQ','bK'].forEach(function(c){PIMG[c]='pieces/'+c+'.svg'});
+          (function(){
+          var $=function(s){return document.querySelector(s)};
+          var BN='০১২৩৪৫৬৭৮৯';function bn(n){return String(n).replace(/\d/g,function(d){return BN[d]})}
+          var TH={'Advantage':'সুবিধা অর্জন','Equalizer':'সমতা ফেরানো','Fork':'ফর্ক','Skewer':'স্কিউয়ার','Discovery':'ডিসকভারি অ্যাটাক','Hanging Piece':'ঝুলন্ত গুটি','Sacrifice':'স্যাক্রিফাইস','Mate in 1':'১ চালে মাত','Mate in 2':'২ চালে মাত','Mate in 3+':'৩+ চালে মাত','Back Rank Mate':'ব্যাক র‍্যাঙ্ক মেট','Promotion':'প্রোমোশন','Endgame Tactics':'এন্ডগেম ট্যাকটিক্স','Queen Sacrifice':'কুইন স্যাক্রিফাইস','Pin':'পিন'};
+          var DAY=['আজ','গতকাল','২ দিন আগে','২ দিন আগে','৩ দিন আগে','৪ দিন আগে','৫ দিন আগে','৬ দিন আগে','১ সপ্তাহ আগে','১ সপ্তাহ আগে','১ সপ্তাহ আগে','২ সপ্তাহ আগে'];
+          var OUT={win:'জয়',loss:'হার',draw:'ড্র'};
+          var G={a:{}};
+          var BOARDS=[['classic','ক্লাসিক','#ecdfc0','#7d9a6e'],['purple','বেগুনি','#a2a3d9','#533ad4'],['blue','নীল','#3f6fc9','#32439d'],['green','সবুজ','#86bd47','#5d8c34'],['red','লাল','#c4413f','#9d2d2c']];
+          var BD='purple';
+          function setBoard(b){BD=b;document.documentElement.setAttribute('data-board',b);try{localStorage.setItem('cp-board',JSON.stringify(b))}catch(e){}}
+          function lsGet(k,d){try{var v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}
+          function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}}
+          BD=lsGet('cp-board','purple');document.documentElement.setAttribute('data-board',BD);
+          var score=lsGet('cp-score',{});var best=lsGet('cp-best',{});var mem={};
+          var S={tab:'games',view:'list',gi:0,sel:{},q:[],qi:0,vis:{mode:'find',orient:'w',dur:30,help:false}};
+          var GL={'P':'♟','N':'♞','B':'♝','R':'♜','Q':'♛','K':'♚'};var PC=['','P','N','B','R','Q','K'];
+          function themesOf(g){var m={};g.pz.forEach(function(p){p.th.forEach(function(t){m[t]=(m[t]||0)+1})});return Object.keys(m).map(function(t){return{t:t,n:m[t]}}).sort(function(a,b){return b.n-a.n||(a.t<b.t?-1:1)})}
+          function myScore(t){var s=score[t];return s&&s.total?Math.round(100*s.ok/s.total)+'%':'—'}
+          function bnPct(s){return s==='—'?s:bn(s)}
+          function setTab(t){S.tab=t;S.view=t==='games'?'list':t==='vision'?'vision':'alist';stopVis();render()}
+          function render(){
+           var h='<header><h1>দাবা পাজল</h1><span class="user">chess.com/<b id="uname">'+esc(G.user||'তোমার_আইডি')+'</b></span></header>';
+           h+='<div class="tabs"><button id="tg" class="'+(S.tab==='games'?'on':'')+'">আমার গেম</button><button id="tv" class="'+(S.tab==='vision'?'on':'')+'">চেস ভিশন</button><button id="ta" class="'+(S.tab==='art'?'on':'')+'">আমার লেখা</button></div>';
+           h+='<div class="bsw"><span>বোর্ড</span>'+BOARDS.map(function(b){return'<button data-b="'+b[0]+'" aria-label="'+b[1]+'" title="'+b[1]+'" class="'+(BD===b[0]?'on':'')+'" style="background:linear-gradient(135deg,'+b[2]+' 50%,'+b[3]+' 50%)"></button>'}).join('')+'</div>';
+           h+='<div id="main"></div>';$('#app').innerHTML=h;
+           $('#tg').onclick=function(){setTab('games')};$('#tv').onclick=function(){setTab('vision')};$('#ta').onclick=function(){setTab('art')};
+           document.querySelectorAll('.bsw button').forEach(function(b){b.onclick=function(){setBoard(b.dataset.b);document.querySelectorAll('.bsw button').forEach(function(x){x.classList.toggle('on',x===b)})}});
+           if(S.tab==='games'){if(S.view==='list')vList();else if(S.view==='themes')vThemes();else if(S.view==='an')vAn();else if(S.view==='play')vPlay();else vDone()}else if(S.tab==='vision')vVision();else if(S.view==='aview')aView();else if(S.view==='aedit')aEdit();else aList();
+          }
+          function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+          /* ===== আসল অ্যাপ: গেম আনা, ইঞ্জিন, পাজল বানানো ===== */
+          var SE=(function(){var module={exports:{}};var require=function(){return Core};const C=require('./core.js');const V=C.VAL;const MATE=30000;let nodes=0;
+          function evalPos(pos){let s=0;const b=pos.b;for(let i=0;i<64;i++){const p=b[i];if(!p)continue;const a=Math.abs(p),f=i&7,r=i>>3,rr=p>0?r:7-r;let v=V[a];
+           if(a===1)v+=rr*5+((f>=2&&f<=5&&rr>=3)?8:0);else if(a===2||a===3)v+=12-(Math.abs(3.5-f)+Math.abs(3.5-r))*3;s+=p>0?v:-v;}return pos.turn===1?s:-s;}
+          function mat(pos){let s=0;for(let i=0;i<64;i++){const p=pos.b[i];if(p)s+=p>0?V[p]:-V[-p];}return pos.turn===1?s:-s;}
+          function mvv(pos,ms){const b=pos.b;return ms.map(m=>{const t=(m>>6)&63,f=m&63;let s=0;const cap=b[t]?Math.abs(b[t]):((m>>15)&1?1:0);if(cap)s+=10*V[cap]-V[Math.abs(b[f])]/10+1000;if((m>>12)&7)s+=800;return [s,m];}).sort((a,b)=>b[0]-a[0]).map(x=>x[1]);}
+          function qs(pos,al,be,q){nodes++;const st=evalPos(pos);if(st>=be)return be;if(st>al)al=st;if(q>6)return al;const me=pos.turn;
+           for(const m of mvv(pos,pos.gen(true))){pos.make(m);if(pos.inCheck(me)){pos.unmake();continue;}const s=-qs(pos,-be,-al,q+1);pos.unmake();if(s>=be)return be;if(s>al)al=s;}return al;}
+          function ab(pos,d,al,be,ply){nodes++;const me=pos.turn;if(d<=0)return qs(pos,al,be,0);let any=false;
+           for(const m of mvv(pos,pos.gen(false))){pos.make(m);if(pos.inCheck(me)){pos.unmake();continue;}any=true;const s=-ab(pos,d-1,-be,-al,ply+1);pos.unmake();if(s>=be)return be;if(s>al)al=s;}
+           if(!any)return pos.inCheck(me)?-MATE+ply:0;return al;}
+          function analyze(pos,depth){const out=[];for(const m of pos.legal()){pos.make(m);const s=-ab(pos,depth-1,-MATE-1,MATE+1,1);pos.unmake();out.push({m,u:C.uci(m),s});}out.sort((a,b)=>b.s-a.s);return out;}
+          module.exports={analyze,evalPos,mat,qs,ab,MATE,getNodes:()=>nodes};
+          ;return module.exports})();
+          var CL=(function(){var C=Core,V=Core.VAL;const val=p=>V[Math.abs(p)];
+          function ray(pos,sq,d){const out=[];let f=(sq&7)+C.KD[d][0],r=(sq>>3)+C.KD[d][1];while(f>=0&&f<8&&r>=0&&r<8){const s=r*8+f;if(pos.b[s])out.push(s);f+=C.KD[d][0];r+=C.KD[d][1];if(out.length>=2)break;}return out;}
+          function classify(fen,sol){ // sol: uci list, user moves at even idx
+           const pos=new C.Pos().setFen(fen);const me=pos.turn;const th=new Set();const umoves=[];let pieces=0;for(let i=0;i<64;i++){const a=Math.abs(pos.b[i]);if(a>1&&a<6)pieces++;}
+           const pre=new C.Pos().setFen(fen);const m1=pre.parse(sol[0]);const f1=m1&63,t1=(m1>>6)&63;const mover=Math.abs(pre.b[f1]);const capv=pre.b[t1]?val(pre.b[t1]):((m1>>15)&1?100:0);
+           // play through
+           const seq=new C.Pos().setFen(fen);let mate=false,promo=false,lastSq=-1;
+           sol.forEach((u,i)=>{const m=seq.parse(u);if(i%2===0){umoves.push(m);if((m>>12)&7)promo=true;}seq.make(m);});
+           if(seq.inCheck(seq.turn)&&seq.legal().length===0)mate=true;
+           const n=umoves.length;
+           if(mate){th.add(n===1?'Mate in 1':n===2?'Mate in 2':'Mate in 3+');
+            // back rank: loser king on back rank, last mover R/Q on same rank
+            const lk=seq.ks[seq.turn===1?0:1],lastM=umoves[n-1];const back=seq.turn===1?0:7;const lt=(lastM>>6)&63;const lp=Math.abs(seq.b[lt]);
+            if((lk>>3)===back&&(lp===4||lp===5)&&(lt>>3)===back)th.add('Back Rank Mate');}
+           if(promo)th.add('Promotion');
+           // after u1
+           pre.make(m1);const after=pre;const tp=Math.abs(after.b[t1]);
+           // fork
+           let tg=0;const attacked=[];
+           const tmp=new C.Pos().setFen(after.fen());tmp.turn=me; // mover's view
+           const ms=tmp.gen(false).filter(m=>(m&63)===t1&&(m>>15&8));
+           for(const m of ms){const tt=(m>>6)&63;const pc=Math.abs(after.b[tt]);if(pc===1&&mover!==1)continue;const prot=after.isAttacked(tt,-me);if(pc===6||val(after.b[tt])>val(after.b[t1])+10||!prot)attacked.push(tt);}
+           if(attacked.length>=2&&mover!==6&&!mate)th.add('Fork');
+           // pin / skewer
+           if(mover===3||mover===4||mover===5){const dirs=mover===3?[4,5,6,7]:mover===4?[0,1,2,3]:[0,1,2,3,4,5,6,7];
+            for(const d of dirs){const rr=ray(after,t1,d);if(rr.length<2)continue;const X=rr[0],Y=rr[1];if(after.b[X]*me>=0||after.b[Y]*me>=0)continue;const vx=Math.abs(after.b[X])===6?9999:val(after.b[X]),vy=Math.abs(after.b[Y])===6?9999:val(after.b[Y]);
+             const u2=sol[2]?C.sqOf(sol[2].slice(2,4)):-1;
+             if(vx>vy&&(u2===Y||Math.abs(after.b[X])===6))th.add('Skewer');else if(vy>vx&&(u2===X||u2===Y)&&!mate)th.add('Pin');}}
+           // discovery
+           if(mover!==3&&mover!==4&&mover!==5||true){const b0=new C.Pos().setFen(fen);for(let s=0;s<64;s++){const p=b0.b[s];if(p*me<=0)continue;const a=Math.abs(p);if(s===f1||a<3||a>5)continue;
+             const dirs=a===3?[4,5,6,7]:a===4?[0,1,2,3]:[0,1,2,3,4,5,6,7];for(const d of dirs){let f=(s&7)+C.KD[d][0],r=(s>>3)+C.KD[d][1],seen=false,hit=-1;while(f>=0&&f<8&&r>=0&&r<8){const q=r*8+f;if(b0.b[q]){if(!seen){if(q===f1){seen=true;}else break;}else{hit=q;break;}}f+=C.KD[d][0];r+=C.KD[d][1];}
+              if(seen&&hit>=0&&b0.b[hit]*me<0&&(Math.abs(b0.b[hit])>=3)&&mover!==a){// still blocked after?
+               let ok=true;{let ff=(s&7)+C.KD[d][0],rr2=(s>>3)+C.KD[d][1];while(ff>=0&&ff<8&&rr2>=0&&rr2<8){const q=rr2*8+ff;if(after.b[q]){if(q!==hit)ok=false;break;}ff+=C.KD[d][0];rr2+=C.KD[d][1];}}
+               if(ok&&(m1>>15&8||true))th.add('Discovery');}}}}
+           // hanging piece
+           if((m1>>15)&8&&capv>=300&&!after.isAttacked(t1,-me)&&!mate)th.add('Hanging Piece');
+           // sacrifice
+           if(!mate&&after.isAttacked(t1,-me)&&val(after.b[t1])-capv>=200&&sol.length>=3&&tp!==6){th.add(tp===5?'Queen Sacrifice':'Sacrifice');}
+           if(pieces<=4)th.add('Endgame Tactics');
+           return [...th];}
+          ;return classify})();
+          var TCN={bullet:'বুলেট',blitz:'ব্লিটজ',rapid:'র‍্যাপিড',daily:'ডেইলি'};
+          function relDay(t){var d=Math.floor((Date.now()/1000-t)/86400);return d<=0?'আজ':d===1?'গতকাল':bn(d)+' দিন আগে'}
+          function saveGames(){lsSet('cp-games',GAMES)}
+          function movesOf(g){var s=g.pgn.replace(/\[[^\]]*\]/g,' ').replace(/\{[^}]*\}/g,' ');var m=s.match(/\d+\./g);return m?parseInt(m[m.length-1],10):0}
+          function sanOf(pos,tok){var ls=pos.legal();var t=tok.replace(/[+#!?]/g,'');for(var i=0;i<ls.length;i++){if(pos.san(ls[i],ls).replace(/[+#]/g,'')===t)return ls[i]}return 0}
+          function parsePGN(pgn){var s=pgn.replace(/\[[^\]]*\]/g,' ').replace(/\{[^}]*\}/g,' ').replace(/\([^)]*\)/g,' ').replace(/\$\d+/g,' ').replace(/\d+\.(\.\.)?/g,' ').replace(/1-0|0-1|1\/2-1\/2|\*/g,' ');
+           var toks=s.split(/\s+/).filter(Boolean),pos=new Core.Pos().setFen(Core.START),out=[];
+           for(var i=0;i<toks.length;i++){var m=sanOf(pos,toks[i]);if(!m)break;out.push(Core.uci(m));pos.make(m)}return out}
+          function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
+          /* গেম আনা */
+          function loadGames(){
+           var u=G.user;if(!u)return;G.status='গেম আনছি…';if(S.view==='list'&&S.tab==='games')vList();
+           var base='https://api.chess.com/pub/player/'+encodeURIComponent(u.toLowerCase());
+           fetch(base+'/games/archives').then(function(r){if(r.status===404)throw new Error('এই ইউজারনেম Chess.com-এ পাওয়া যায়নি।');if(!r.ok)throw new Error('Chess.com সাড়া দিচ্ছে না ('+r.status+')।');return r.json()})
+           .then(function(j){var a=(j.archives||[]).slice(-2).reverse();if(!a.length)throw new Error('এই আইডিতে এখনো কোনো গেম নেই।');
+            return Promise.all(a.map(function(url){return fetch(url).then(function(r){return r.ok?r.json():{games:[]}})}))})
+           .then(function(arr){var all=[];arr.forEach(function(x){(x.games||[]).forEach(function(g){all.push(g)})});
+            all=all.filter(function(g){return g.rules==='chess'&&g.pgn}).sort(function(a,b){return b.end_time-a.end_time}).slice(0,20);
+            var old={};GAMES.forEach(function(g){old[g.key]=g});var lu=u.toLowerCase();
+            GAMES=all.map(function(g,i){var w=g.white.username.toLowerCase()===lu;var me=w?g.white:g.black,op=w?g.black:g.white;var res=me.result;
+             var out=res==='win'?'win':(['agreed','repetition','stalemate','insufficient','50move','timevsinsufficient'].indexOf(res)>=0?'draw':'loss');var o=old[g.url];
+             return{key:g.url,id:i,opp:op.username,rat:op.rating,color:w?'w':'b',out:out,tc:TCN[g.time_class]||g.time_class,t:g.end_time,date:relDay(g.end_time),pgn:g.pgn,an:o?o.an:false,pz:o?o.pz:[],eng:o?o.eng:''}});
+            G.status='';saveGames();if(S.view==='list'&&S.tab==='games')vList();autoNext()})
+           .catch(function(e){var m=e&&e.message||'';G.status=(m&&!/Failed to fetch|NetworkError|Load failed/i.test(m))?m:'ইন্টারনেট সংযোগে সমস্যা। একটু পরে আবার চেষ্টা করো।';if(S.view==='list'&&S.tab==='games')vList()})}
+          /* ইঞ্জিন */
+          var Eng={mode:'',w:null,on:null,p:null};
+          function engSend(s){Eng.w.postMessage(s)}
+          function engInit(){if(Eng.p)return Eng.p;Eng.p=new Promise(function(res){var done=false;
+           function fin(m){if(done)return;done=true;Eng.mode=m;if(m!=='stockfish'&&Eng.w){try{Eng.w.terminate()}catch(e){}Eng.w=null}res(m)}
+           setTimeout(function(){fin('basic')},20000);
+           fetch('engine.json').then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(j){
+            var w=new Worker(j.js+(j.wasm?'#'+j.wasm:''));Eng.w=w;
+            w.onerror=function(){fin('basic')};
+            w.onmessage=function(e){var l=typeof e.data==='string'?e.data:'';
+             if(l==='uciok'){engSend('setoption name Threads value 1');engSend('setoption name Hash value 16');engSend('setoption name MultiPV value 2');engSend('isready')}
+             else if(l==='readyok'&&!done){fin('stockfish')}else if(Eng.on)Eng.on(l)};
+            engSend('uci')}).catch(function(){fin('basic')})});return Eng.p}
+          function sc(x){return x.mate?(x.v>0?30000-x.v:-30000-x.v):x.v}
+          function engEval(fen,ms){return new Promise(function(res){
+           if(Eng.mode==='stockfish'){var pv={};Eng.on=function(l){
+             if(l.indexOf('info')===0&&l.indexOf(' pv ')>0){var k=+((l.match(/ multipv (\d+)/)||[0,1])[1]);var m=l.match(/ score (cp|mate) (-?\d+)/);if(!m)return;pv[k]={mate:m[1]==='mate',v:+m[2],pv:l.split(' pv ')[1].trim().split(/\s+/)}}
+             else if(l.indexOf('bestmove')===0){Eng.on=null;res(pv)}};
+            engSend('position fen '+fen);engSend('go movetime '+ms)}
+           else setTimeout(function(){var pos=new Core.Pos().setFen(fen);var an=SE.analyze(pos,ms>500?4:3);var out={};
+            for(var i=0;i<2&&i<an.length;i++){var s=an[i].s;var mate=s>=SE.MATE-60||s<=-SE.MATE+60;
+             out[i+1]=mate?{mate:true,v:s>0?((SE.MATE-s+1)>>1):-((SE.MATE+s+1)>>1),pv:[an[i].u]}:{mate:false,v:s,pv:[an[i].u]}}res(out)},0)})}
+          /* পাজল হওয়ার শর্ত: সেরা চালটা স্পষ্টভাবে একটাই */
+          function cond(r){var a=r[1],b=r[2];if(!a||!b)return null;var v1=sc(a),v2=sc(b);
+           if(a.mate&&a.v>0)return(!(b.mate&&b.v>0)||b.v-a.v>=2)?'mate':null;
+           if(a.mate)return null;
+           if(v1>=120&&v1<1500&&v1-v2>=150&&v2<400)return'win';
+           if(v1>=-60&&v1<=80&&v2<=-200)return'eq';
+           return null}
+          function trimLine(fen,pv,mateN){var p=new Core.Pos().setFen(fen),out=[];var lim=mateN?Math.min(pv.length,2*mateN-1):Math.min(pv.length,3);
+           for(var i=0;i<lim;i++){var m=p.parse(pv[i]);if(!m)break;out.push(pv[i]);p.make(m)}
+           if(out.length%2===0)out.pop();return out}
+          function basicExt(fen,u1,mate){var p=new Core.Pos().setFen(fen);var sol=[u1];p.make(p.parse(u1));
+           for(var k=0;k<3;k++){if(!p.legal().length)break;var o=SE.analyze(p,3)[0];var op=p.parse(o.u);var q=new Core.Pos().setFen(p.fen());q.make(op);if(!q.legal().length)break;
+            var us=SE.analyze(q,4)[0];var um=q.parse(us.u);var cap=(um>>15)&8;var isMt=us.s>=SE.MATE-60;if(!(mate||cap||isMt))break;sol.push(o.u,us.u);p.make(op);p.make(um)}
+           return sol}
+          /* বিশ্লেষণ */
+          var AN={g:null,pct:0,tok:null,err:''};
+          function tick(g,p){AN.pct=p;var e=$('#apct');if(e)e.textContent=bn(Math.round(p*100))+'%';var b=$('#abar');if(b)b.style.width=Math.round(p*100)+'%';
+           var c=document.querySelector('[data-pc="'+g.id+'"]');if(c)c.firstChild.textContent=bn(Math.round(p*100))+'%'}
+          async function analyzeGame(g,tok){
+           var mode=await engInit();G.eng=mode;
+           var mv=parsePGN(g.pgn);var uc=g.color==='w'?1:-1;var pos=new Core.Pos().setFen(Core.START);var puz=[],last=-9;
+           for(var ply=0;ply<mv.length;ply++){
+            if(tok.cancel)return;tick(g,ply/mv.length);
+            if(pos.turn===uc&&ply>=8&&ply-last>=4&&puz.length<10&&pos.legal().length>=2){
+             var fen=pos.fen();var r=await engEval(fen,300);var c=cond(r);
+             if(c){var r2=await engEval(fen,900);var c2=cond(r2);
+              if(c2&&r2[1].pv[0]===r[1].pv[0]){var a=r2[1];var mateN=(a.mate&&a.v>0)?a.v:0;var sol=trimLine(fen,a.pv,mateN);
+               if(mode!=='stockfish'&&sol.length<3)sol=basicExt(fen,a.pv[0],!!mateN);
+               if(sol.length){var th=[];try{th=CL(fen,sol)||[]}catch(e){}
+                th=th.filter(function(t){return t!=='Endgame Tactics'||th.length===1});
+                if(!th.length)th=[c2==='eq'?'Equalizer':'Advantage'];
+                puz.push({fen:fen,sol:sol,th:th,found:mv[ply]===sol[0]});last=ply}}}
+             await sleep(80)}
+            pos.make(pos.parse(mv[ply]))}
+           if(tok.cancel)return;
+           g.pz=puz;g.an=true;g.eng=mode}
+          function startAn(g){if(AN.tok)AN.tok.cancel=true;var tok={cancel:false};AN={g:g,pct:0,tok:tok,err:''};
+           analyzeGame(g,tok).then(function(){if(tok.cancel)return;AN={g:null,pct:0,tok:null,err:''};saveGames();refreshAn()}).catch(function(e){if(tok.cancel)return;AN={g:null,pct:0,tok:null,err:String(e&&e.message||e)};refreshAn()})}
+          function refreshAn(){if(S.tab!=='games')return;if(S.view==='list')vList();else if(S.view==='an')vAn()}
+          function autoNext(){if(!AN.g&&GAMES[0]&&!GAMES[0].an)startAn(GAMES[0])}
+          function engNote(){return G.eng==='stockfish'?'ইঞ্জিন: Stockfish চালু ✓':G.eng==='basic'?'ইঞ্জিন: সরল ব্যাকআপ (Stockfish চালু হয়নি, পাজল কম নির্ভুল হবে)':'ইঞ্জিন চালু হচ্ছে…'}
+          function vList(){
+           var cur=$('#uid');var uv=cur?cur.value:(G.user||'');
+           var h='<div class="sync"><input id="uid" value="'+esc(uv)+'" placeholder="Chess.com ইউজারনেম" autocapitalize="off" autocomplete="off" spellcheck="false"><button class="btn" id="usave">'+(G.user?'রিফ্রেশ':'সেভ')+'</button></div>';
+           h+='<div class="note" id="gnote">'+esc(G.status||engNote())+(AN.err?' · বিশ্লেষণে সমস্যা: '+esc(AN.err):'')+'</div>';
+           if(!GAMES.length)h+='<div class="msg">তোমার Chess.com ইউজারনেম লিখে সেভ চাপো। সাম্প্রতিক গেমগুলো এখানে আসবে।</div>';
+           h+='<div class="list">';
+           GAMES.forEach(function(g){var miss=g.pz.filter(function(p){return!p.found}).length,right;
+            if(g.an)right='<span class="cnt">'+bn(g.pz.length)+'<small>পাজল</small></span>';
+            else if(AN.g===g)right='<span class="cnt" data-pc="'+g.id+'">'+bn(Math.round(AN.pct*100))+'%<small>বিশ্লেষণ চলছে</small></span>';
+            else right='<span class="cnt" style="font-size:14px;color:var(--accent)">বিশ্লেষণ<small>ট্যাপ করো</small></span>';
+            h+='<button class="game" data-g="'+g.id+'"><span class="dot '+g.out+'">'+OUT[g.out]+'</span><span class="g-t">'+(g.color==='w'?'⚪':'⚫')+' vs '+esc(g.opp)+' ('+bn(g.rat||'?')+')</span>'+right+'<span class="g-s">'+esc(g.tc)+' · '+bn(movesOf(g))+' চাল · '+g.date+(g.an&&g.pz.length?' · মিস '+bn(miss):'')+'</span></button>'});
+           $('#main').innerHTML=h+'</div>';
+           $('#usave').onclick=function(){G.user=$('#uid').value.trim();lsSet('cp-user',G.user);var h2=$('#uname');if(h2)h2.textContent=G.user||'তোমার_আইডি';loadGames()};
+           document.querySelectorAll('.game').forEach(function(b){b.onclick=function(){S.gi=+b.dataset.g;var g=GAMES[S.gi];
+            if(g.an){S.sel={};themesOf(g).forEach(function(x){S.sel[x.t]=true});S.view='themes'}else{if(AN.g!==g)startAn(g);S.view='an'}render()}})}
+          function vAn(){var g=GAMES[S.gi];
+           if(g.an&&!AN.g){S.sel={};themesOf(g).forEach(function(x){S.sel[x.t]=true});S.view='themes';vThemes();return}
+           var p=Math.round(AN.pct*100);
+           var h='<button class="back" id="bk">← গেমের তালিকা</button><h2>পাজল বানাচ্ছি</h2><div class="sub">vs '+esc(g.opp)+' · প্রতিটা পজিশন ইঞ্জিন দিয়ে যাচাই হচ্ছে</div>';
+           if(AN.err)h+='<div class="msg bad">সমস্যা হয়েছে: '+esc(AN.err)+'</div><div class="row"><button class="btn" id="ar">আবার চেষ্টা</button></div>';
+           else h+='<div class="box res"><div class="big" id="apct">'+bn(p)+'%</div><div class="sub">বিশ্লেষণ চলছে। ফোন একটু গরম হতে পারে।</div><div class="progress"><i id="abar" style="width:'+p+'%"></i></div></div><div class="note" style="margin-top:12px">'+esc(engNote())+'<br>তুমি চাইলে পেছনে গিয়ে অন্য কিছু দেখতে পারো, বিশ্লেষণ চলতে থাকবে।</div><div class="row"><button class="btn ghost" id="acn">বন্ধ করো</button></div>';
+           $('#main').innerHTML=h;$('#bk').onclick=function(){S.view='list';render()};
+           var c=$('#acn');if(c)c.onclick=function(){if(AN.tok)AN.tok.cancel=true;AN={g:null,pct:0,tok:null,err:''};S.view='list';render()};
+           var r=$('#ar');if(r)r.onclick=function(){startAn(g);vAn()}}
+          window.appBack=function(){var z=document.querySelector('.zoom');if(z){z.remove();return true}var b=$('#bk');if(b){b.click();return true}if(S.tab!=='games'){setTab('games');return true}return false};
+          function boot(){G.user=lsGet('cp-user','');GAMES=lsGet('cp-games',[]);GAMES.forEach(function(g,i){g.id=i;g.date=relDay(g.t)});render();
+           engInit().then(function(m){G.eng=m;var n=$('#gnote');if(n&&!G.status)n.textContent=engNote()});if(G.user)loadGames()}
+
+          function selCount(){var g=GAMES[S.gi];return g.pz.filter(function(p){return p.th.some(function(t){return S.sel[t]})}).length}
+          function vThemes(){
+           var g=GAMES[S.gi],ts=themesOf(g),all=ts.every(function(x){return S.sel[x.t]});
+           var h='<button class="back" id="bk">← গেমের তালিকা</button><h2>কাস্টম পাজল</h2><div class="sub">vs '+esc(g.opp)+' · এই গেমে '+bn(ts.length)+' ধরনের থিম পাওয়া গেছে</div>';
+           if(!g.pz.length)h+='<div class="msg">এই গেমে কোনো পরিষ্কার ট্যাকটিক পাওয়া যায়নি।</div>';
+           else{h+='<div class="th-head"><span></span><span>থিম</span><span>পাজল</span><span>আমার স্কোর</span></div><div class="box">';
+           h+='<button class="th '+(all?'on':'')+'" data-t="*"><span class="ck">'+(all?'✓':'')+'</span><span class="nm">সব থিম</span><span class="n">'+bn(g.pz.length)+'</span><span class="s"></span></button>';
+           ts.forEach(function(x){var on=S.sel[x.t];h+='<button class="th '+(on?'on':'')+'" data-t="'+esc(x.t)+'"><span class="ck">'+(on?'✓':'')+'</span><span class="nm">'+esc(x.t)+'<small>'+(TH[x.t]||'')+'</small></span><span class="n">'+bn(x.n)+'</span><span class="s">'+bnPct(myScore(x.t))+'</span></button>'});
+           h+='</div><div class="bar"><button class="btn" id="go"></button></div>'}
+           $('#main').innerHTML=h;$('#bk').onclick=function(){S.view='list';render()};
+           if(!g.pz.length)return;
+           function upd(){var n=selCount();var b=$('#go');b.textContent=n?'শুরু করো · '+bn(n)+'টি পাজল':'একটা থিম বেছে নাও';b.disabled=!n}
+           upd();
+           document.querySelectorAll('.th').forEach(function(b){b.onclick=function(){var t=b.dataset.t;if(t==='*'){var a=!all;ts.forEach(function(x){S.sel[x.t]=a})}else S.sel[t]=!S.sel[t];vThemes()}});
+           $('#go').onclick=function(){S.q=[];g.pz.forEach(function(p,i){if(p.th.some(function(t){return S.sel[t]}))S.q.push(i)});S.qi=0;S.ok=0;S.fail=0;S.view='play';render()}
+          }
+          /* board */
+          function boardHTML(pos,o){
+           var h='<div class="board" id="bd">';
+           for(var r=0;r<8;r++)for(var f=0;f<8;f++){
+            var rank=o.flip?r:7-r,file=o.flip?7-f:f,sq=rank*8+file,p=pos?pos.b[sq]:0;
+            var cls='sq'+(((rank+file)&1)?'':' d');
+            if(o.last&&(o.last[0]===sq||o.last[1]===sq))cls+=' last';
+            h+='<div class="'+cls+'" data-sq="'+sq+'">';
+            if(p)h+='<img class="pc" draggable="false" alt="" src="'+PIMG[(p>0?'w':'b')+PC[Math.abs(p)]]+'">';
+            if(o.coords){if(f===7)h+='<span class="co r">'+(rank+1)+'</span>';if(r===7)h+='<span class="co f">'+'abcdefgh'[file]+'</span>'}
+            h+='</div>'}
+           return h+'</div>'}
+          function sqEl(s){return document.querySelector('[data-sq="'+s+'"]')}
+          function clr(c){document.querySelectorAll('.'+c).forEach(function(e){e.classList.remove(c)})}
+          /* puzzle */
+          var P={};
+          function vPlay(){
+           var g=GAMES[S.gi],p=g.pz[S.q[S.qi]];
+           P={p:p,pos:new Core.Pos().setFen(p.fen),idx:0,sel:-1,fail:false,busy:false,last:null,done:false};
+           P.side=P.pos.turn;
+           var h='<button class="back" id="bk">← থিম তালিকা</button><div class="status"><b>পাজল '+bn(S.qi+1)+'/'+bn(S.q.length)+'</b><span class="chips">'+p.th.map(function(t){return'<span class="chip">'+esc(t)+'</span>'}).join('')+'<span class="chip '+(p.found?'got':'miss')+'">'+(p.found?'খেলায় পেয়েছিলে':'খেলায় মিস')+'</span></span></div>';
+           h+=boardHTML(P.pos,{flip:P.side===-1})+'<div class="msg" id="msg"></div><div class="row"><button class="btn ghost" id="hint">ইঙ্গিত</button><button class="btn ghost" id="sol">সমাধান দেখাও</button><button class="btn" id="nx" disabled>পরেরটা</button></div>';
+           $('#main').innerHTML=h;msg((P.side===1?'সাদার':'কালোর')+' চাল। সেরা চালটা খুঁজে বের করো।');
+           $('#bk').onclick=function(){S.view='themes';render()};
+           $('#bd').onclick=function(e){var t=e.target.closest('.sq');if(t)tap(+t.dataset.sq)};
+           $('#hint').onclick=function(){if(P.done)return;P.fail=true;clr('hint');var u=P.p.sol[P.idx];sqEl(Core.sqOf(u.slice(0,2))).classList.add('hint');msg('এই ঘরের গুটিটা দিয়ে চাল দাও।')};
+           $('#sol').onclick=showSol;
+           $('#nx').onclick=nextP;
+          }
+          function msg(t,c){var m=$('#msg');if(m){m.textContent=t;m.className='msg'+(c?' '+c:'')}}
+          function redraw(){var o=$('#bd');if(!o)return;var t=document.createElement('div');t.innerHTML=boardHTML(P.pos,{flip:P.side===-1,last:P.last});var n=t.firstChild;n.onclick=o.onclick;o.replaceWith(n)}
+          function tap(sq){
+           if(P.busy||P.done)return;var pos=P.pos,pc=pos.b[sq];
+           if(P.sel>=0){var ms=pos.legal().filter(function(m){return(m&63)===P.sel&&((m>>6)&63)===sq});
+            if(ms.length){var m=ms[0];ms.forEach(function(x){if(((x>>12)&7)===5)m=x});tryMove(m);return}}
+           clr('sel');clr('dst');clr('hint');
+           if(pc&&pc*P.side>0){P.sel=sq;sqEl(sq).classList.add('sel');pos.legal().forEach(function(m){if((m&63)===sq)sqEl((m>>6)&63).classList.add('dst')})}else P.sel=-1;
+          }
+          function tryMove(m){
+           var pos=P.pos,u=Core.uci(m),exp=P.p.sol[P.idx];P.sel=-1;
+           pos.make(m);var mate=pos.legal().length===0&&pos.inCheck(pos.turn);
+           if(u===exp||mate){P.last=[m&63,(m>>6)&63];P.idx++;redraw();
+            if(P.idx>=P.p.sol.length||mate){finish()}else{P.busy=true;msg('ঠিক! প্রতিপক্ষ উত্তর দিচ্ছে…','good');setTimeout(function(){var o=pos.parse(P.p.sol[P.idx]);pos.make(o);P.last=[o&63,(o>>6)&63];P.idx++;P.busy=false;redraw();msg('এবার তোমার পরের চাল।')},550)}}
+           else{pos.unmake();P.fail=true;redraw();var b=$('#bd');b.classList.add('shake');setTimeout(function(){b.classList.remove('shake')},320);msg('এটা সেরা চাল নয়। আবার চেষ্টা করো।','bad')}
+          }
+          function finish(){
+           P.done=true;var ok=!P.fail;if(!P.rec){P.rec=1;if(ok)S.ok++;else S.fail++;P.p.th.forEach(function(t){var s=score[t]||(score[t]={ok:0,total:0});s.total++;if(ok)s.ok++});lsSet('cp-score',score)}
+           msg(ok?'দারুণ! পাজল সমাধান হয়েছে।':'পাজলটা শেষ হলো (সাহায্য নিয়েছ বা ভুল করেছ, তাই স্কোরে ধরা হয়নি)।',ok?'good':'');
+           var n=$('#nx');n.disabled=false;n.textContent=S.qi+1>=S.q.length?'ফলাফল':'পরেরটা'}
+          function showSol(){
+           if(P.done||P.busy)return;P.fail=true;P.busy=true;
+           (function step(){if(P.idx>=P.p.sol.length){P.busy=false;finish();return}
+            var m=P.pos.parse(P.p.sol[P.idx]);P.pos.make(m);P.last=[m&63,(m>>6)&63];P.idx++;redraw();setTimeout(step,700)})();
+          }
+          function nextP(){if(S.qi+1>=S.q.length){S.view='done';render()}else{S.qi++;render()}}
+          function vDone(){
+           var h='<div class="box res"><div class="sub">সেশন শেষ</div><div class="big">'+bn(S.ok)+'/'+bn(S.q.length)+'</div><div class="sub">নিজে থেকে সমাধান করেছ</div></div><div class="row" style="margin-top:12px"><button class="btn ghost" id="a1">থিম বদলাও</button><button class="btn" id="a2">গেমের তালিকা</button></div>';
+           h+='<div class="sub" style="margin-top:14px">থিম অনুযায়ী আমার স্কোর এখন:</div><div class="box">'+themesOf(GAMES[S.gi]).map(function(x){return'<div class="th" style="grid-template-columns:1fr auto"><span class="nm">'+esc(x.t)+'</span><span class="s">'+bnPct(myScore(x.t))+'</span></div>'}).join('')+'</div>';
+           $('#main').innerHTML=h;$('#a1').onclick=function(){S.view='themes';render()};$('#a2').onclick=function(){S.view='list';render()}}
+          /* articles */
+          var ART=null;
+          function demoPoster(){var c='',i,j;for(i=0;i<8;i++)for(j=0;j<8;j++)c+='<rect x="'+(j*50)+'" y="'+(i*50)+'" width="50" height="50" fill="'+(((i+j)&1)?'#533ad4':'#a2a3d9')+'"/>';
+           var s='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 520"><rect width="400" height="520" fill="#1b1840"/><g transform="translate(0,120)">'+c+'</g><text x="200" y="70" fill="#fff" font-size="40" font-weight="700" text-anchor="middle" font-family="sans-serif">নাইট ফর্ক</text><text x="200" y="104" fill="#c9c9ff" font-size="18" text-anchor="middle" font-family="sans-serif">নমুনা পোস্টার</text></svg>';
+           return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(s)}
+          function artLoad(){if(ART)return;ART=lsGet('cp-art',null);if(!ART){ART=[{id:'demo',title:'নাইট ফর্ক: এক চালে দুই শিকার',date:'নমুনা লেখা',poster:demoPoster(),body:'ফর্ক হলো এমন চাল, যেখানে একটা গুটি একসাথে দুটো বা তার বেশি প্রতিপক্ষ গুটিকে আক্রমণ করে।\nঘোড়া এই কাজে সবচেয়ে ভয়ংকর, কারণ ঘোড়াকে আক্রমণ করার সুযোগ প্রতিপক্ষ সহজে পায় না।\nসবচেয়ে বিখ্যাত ফর্ক হলো রয়্যাল ফর্ক, যেখানে ঘোড়া একসাথে রাজা আর বাদশাহকে আক্রমণ করে।\nএই লেখাটা শুধু নমুনা। নিচের বোতাম দিয়ে তুমি নিজের লেখা আর পোস্টার যোগ করতে পারবে।'}]}}
+          function artSave(){return lsSet('cp-art',ART)}
+          function aList(){artLoad();
+           var h='<div class="row" style="margin-bottom:12px"><button class="btn" id="anew">+ নতুন লেখা যোগ করো</button></div><div class="list">';
+           ART.forEach(function(a,i){h+='<button class="art" data-i="'+i+'"><img src="'+a.poster+'" alt=""><span><span class="g-t">'+esc(a.title)+'</span><br><span class="g-s">'+esc(a.date)+'</span></span></button>'});
+           if(!ART.length)h+='<div class="msg">এখনো কোনো লেখা নেই। উপরের বোতাম টিপে প্রথম লেখাটা যোগ করো।</div>';
+           $('#main').innerHTML=h+'</div>';
+           $('#anew').onclick=function(){E={i:-1,poster:'',title:'',body:''};S.view='aedit';render()};
+           document.querySelectorAll('.art').forEach(function(b){b.onclick=function(){S.ai=+b.dataset.i;S.view='aview';render()}})}
+          var E={};
+          function aView(){var a=ART[S.ai];var h='<button class="back" id="bk">← সব লেখা</button>';
+           if(a.poster)h+='<img class="poster" id="pz" src="'+a.poster+'" alt="পোস্টার">';
+           h+='<h2 style="margin-top:14px;font-size:22px">'+esc(a.title)+'</h2><div class="sub">'+esc(a.date)+'</div><div class="body">'+a.body.split(/\n+/).filter(Boolean).map(function(p){return'<p>'+esc(p)+'</p>'}).join('')+'</div><div class="row"><button class="btn ghost" id="ed">সম্পাদনা</button><button class="btn del" id="dl">মুছে ফেলো</button></div>';
+           $('#main').innerHTML=h;$('#bk').onclick=function(){S.view='alist';render()};
+           var pz=$('#pz');if(pz)pz.onclick=function(){var z=document.createElement('div');z.className='zoom';z.innerHTML='<img src="'+a.poster+'" alt="">';z.onclick=function(){z.remove()};document.body.appendChild(z)};
+           $('#ed').onclick=function(){E={i:S.ai,poster:a.poster,title:a.title,body:a.body};S.view='aedit';render()};
+           var d=$('#dl'),arm=false;d.onclick=function(){if(!arm){arm=true;d.textContent='আবার চাপলে মুছে যাবে';return}ART.splice(S.ai,1);artSave();S.view='alist';render()}}
+          function aEdit(){var h='<button class="back" id="bk">← বাতিল</button><h2>'+(E.i<0?'নতুন লেখা':'লেখা সম্পাদনা')+'</h2>';
+           h+='<label class="field">শিরোনাম<input type="text" id="at" value="'+esc(E.title)+'"></label><label class="field">পোস্টার (ছবি)<input type="file" id="af" accept="image/*"></label><div id="ap">'+(E.poster?'<img class="poster" src="'+E.poster+'" alt="">':'')+'</div><label class="field" style="margin-top:12px">লেখা<textarea id="ab">'+esc(E.body)+'</textarea></label><div class="msg" id="am" hidden></div><button class="btn" id="as" style="width:100%">সেভ করো</button>';
+           $('#main').innerHTML=h;
+           $('#bk').onclick=function(){S.view=E.i<0?'alist':'aview';render()};
+           $('#af').onchange=function(){var f=this.files[0];if(!f)return;var r=new FileReader();r.onload=function(){var im=new Image();im.onload=function(){var m=900,k=Math.min(1,m/Math.max(im.width,im.height));var c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);E.poster=c.toDataURL('image/jpeg',.82);$('#ap').innerHTML='<img class="poster" src="'+E.poster+'" alt="">'};im.src=r.result};r.readAsDataURL(f)};
+           $('#as').onclick=function(){E.title=$('#at').value.trim();E.body=$('#ab').value;var m=$('#am');
+            if(!E.title){m.hidden=false;m.className='msg bad';m.textContent='শিরোনাম লিখতে হবে।';return}
+            var item={id:E.i<0?String(Date.now()):ART[E.i].id,title:E.title,date:E.i<0?new Date().toLocaleDateString('bn-BD'):ART[E.i].date,poster:E.poster,body:E.body};
+            var prev=ART.slice();if(E.i<0)ART.unshift(item);else ART[E.i]=item;
+            if(!artSave()){ART=prev;m.hidden=false;m.className='msg bad';m.textContent='সেভ হয়নি। এই ডেমোতে ব্রাউজারের জায়গা কম, ছোট ছবি দিয়ে চেষ্টা করো।';return}
+            S.view='alist';render()}}
+          /* chess vision */
+          var V={};
+          function sn(s){return Core.sqName(s)}
+          function stopVis(){if(V.tm){clearInterval(V.tm);V.tm=null}V.run=false}
+          function vVision(){
+           var o=S.vis;
+           var h='<div class="note">স্কোয়ারের নাম দেখে সঠিক ঘরে ট্যাপ করো। এতে বোর্ডের নোটেশন চোখে বসে যায়।</div>';
+           h+='<div class="seg" id="sm"><button data-m="find" class="'+(o.mode==='find'?'on':'')+'">নাম দেখে ঘর খোঁজো</button><button data-m="name" class="'+(o.mode==='name'?'on':'')+'">ঘর দেখে নাম বলো</button></div>';
+           h+='<div class="seg" id="so"><button data-o="w" class="'+(o.orient==='w'?'on':'')+'">সাদার দিক</button><button data-o="b" class="'+(o.orient==='b'?'on':'')+'">কালোর দিক</button><button data-o="r" class="'+(o.orient==='r'?'on':'')+'">এলোমেলো</button></div>';
+           h+='<div class="seg" id="sd"><button data-d="30" class="'+(o.dur===30?'on':'')+'">৩০ সেকেন্ড</button><button data-d="60" class="'+(o.dur===60?'on':'')+'">৬০ সেকেন্ড</button></div>';
+           h+='<div id="vbody"></div>';$('#main').innerHTML=h;
+           document.querySelectorAll('#sm button').forEach(function(b){b.onclick=function(){o.mode=b.dataset.m;stopVis();vVision()}});
+           document.querySelectorAll('#so button').forEach(function(b){b.onclick=function(){o.orient=b.dataset.o;stopVis();vVision()}});
+           document.querySelectorAll('#sd button').forEach(function(b){b.onclick=function(){o.dur=+b.dataset.d;stopVis();vVision()}});
+           vIdle();
+          }
+          function bkey(){return S.vis.mode+S.vis.dur}
+          function vIdle(){
+           var o=S.vis,b=best[bkey()]||0;
+           $('#vbody').innerHTML='<div class="box res"><div class="sub">ব্যক্তিগত সেরা ('+bn(o.dur)+' সেকেন্ড)</div><div class="big">'+bn(b)+'</div><div class="sub" style="margin:8px 0 14px">'+(o.mode==='find'?'ফাঁকা বোর্ডে নামটা দেখে ঘরে ট্যাপ করবে।':'বোর্ডে একটা ঘর জ্বলে উঠবে, নামটা বেছে নেবে।')+'</div><button class="btn" id="vs">শুরু করো</button></div>';
+           $('#vs').onclick=vStart}
+          function vStart(){
+           var o=S.vis;V={run:true,t:o.dur,sc:0,miss:0,flip:o.orient==='b',lock:false};
+           $('#vbody').innerHTML='<div class="hud"><div><b id="vt">'+bn(o.dur)+'</b><span>সেকেন্ড</span></div><div><b id="vsc">০</b><span>সঠিক</span></div><div><b id="vms">০</b><span>ভুল</span></div></div><div id="vtg"></div><div id="vbd"></div><div id="vop"></div><label class="tgl"><input type="checkbox" id="vh"> সাহায্য: ঘরের কোণে নাম দেখাও</label>';
+           $('#vh').checked=o.help;$('#vh').onchange=function(){o.help=this.checked;vDraw()};
+           V.tm=setInterval(function(){V.t--;var e=$('#vt');if(e)e.textContent=bn(V.t);if(V.t<=0)vEnd()},1000);
+           vNext()}
+          function vNext(){
+           var o=S.vis;if(o.orient==='r')V.flip=Math.random()<.5;
+           var s;do{s=Math.floor(Math.random()*64)}while(s===V.cur);V.cur=s;V.lock=false;vDraw();
+           if(o.mode==='find'){$('#vtg').innerHTML='<div class="target">'+sn(s)+'<small>এই ঘরে ট্যাপ করো</small></div>';$('#vop').innerHTML=''}
+           else{$('#vtg').innerHTML='<div class="target" style="font-size:20px">জ্বলন্ত ঘরটার নাম কী?</div>';
+            var set=[sn(s)];while(set.length<4){var x=sn(Math.floor(Math.random()*64));if(set.indexOf(x)<0)set.push(x)}
+            set.sort(function(){return Math.random()-.5});
+            $('#vop').innerHTML='<div class="opts">'+set.map(function(n){return'<button data-n="'+n+'">'+n+'</button>'}).join('')+'</div>';
+            document.querySelectorAll('#vop button').forEach(function(b){b.onclick=function(){vName(b)}})}
+          }
+          function vDraw(){
+           var o=S.vis;$('#vbd').innerHTML=boardHTML(null,{flip:V.flip,coords:o.help});
+           if(o.mode==='name'){sqEl(V.cur).classList.add('sel')}
+           else $('#vbd').firstChild.onclick=function(e){var t=e.target.closest('.sq');if(t)vTap(+t.dataset.sq)}}
+          function bump(ok){if(ok){V.sc++;$('#vsc').textContent=bn(V.sc)}else{V.miss++;$('#vms').textContent=bn(V.miss)}}
+          function vTap(sq){
+           if(!V.run||V.lock)return;V.lock=true;var ok=sq===V.cur;bump(ok);
+           sqEl(sq).classList.add(ok?'ok':'no');if(!ok)sqEl(V.cur).classList.add('ok');
+           setTimeout(function(){if(V.run)vNext()},ok?220:650)}
+          function vName(b){
+           if(!V.run||V.lock)return;V.lock=true;var ok=b.dataset.n===sn(V.cur);bump(ok);b.classList.add(ok?'ok':'no');
+           if(!ok)document.querySelectorAll('#vop button').forEach(function(x){if(x.dataset.n===sn(V.cur))x.classList.add('ok')});
+           setTimeout(function(){if(V.run)vNext()},ok?220:650)}
+          function vEnd(){
+           stopVis();var o=S.vis,k=bkey(),nb=V.sc>(best[k]||0),tot=V.sc+V.miss;if(nb){best[k]=V.sc;lsSet('cp-best',best)}
+           $('#vbody').innerHTML='<div class="box res"><div class="sub">সময় শেষ</div><div class="big">'+bn(V.sc)+'</div><div class="sub">সঠিক · ভুল '+bn(V.miss)+' · নির্ভুলতা '+bn(tot?Math.round(100*V.sc/tot):0)+'%</div>'+(nb?'<div class="pb" style="margin-top:8px">নতুন ব্যক্তিগত সেরা!</div>':'<div class="sub" style="margin-top:8px">সেরা: '+bn(best[k]||0)+'</div>')+'<button class="btn" id="vs" style="margin-top:14px">আবার খেলো</button></div>';
+           $('#vs').onclick=vStart}
+          window.addEventListener('pagehide',stopVis);
+          boot();
+          })();
+          </script>
+
+          </body></html>
+          PATH_EOF
+          mkdir -p chesspuz-app/app/src/main/java/com/chesspuz/app
+          cat > chesspuz-app/app/src/main/java/com/chesspuz/app/MainActivity.kt <<'PATH_EOF'
+          package com.chesspuz.app
+
+          import android.app.Activity
+          import android.content.Intent
+          import android.content.res.Configuration
+          import android.graphics.Color
+          import android.net.Uri
+          import android.os.Bundle
+          import android.view.View
+          import android.webkit.ValueCallback
+          import android.webkit.WebChromeClient
+          import android.webkit.WebResourceRequest
+          import android.webkit.WebResourceResponse
+          import android.webkit.WebSettings
+          import android.webkit.WebView
+          import android.webkit.WebViewClient
+          import androidx.webkit.WebViewAssetLoader
+
+          /** দাবা পাজল: ওয়েব-ভিত্তিক অ্যাপকে https://appassets... ঠিকানায় চালায়, যাতে Stockfish ওয়ার্কার ও Chess.com সংযোগ কাজ করে। */
+          class MainActivity : Activity() {
+
+              private lateinit var web: WebView
+              private var chooser: ValueCallback<Array<Uri>>? = null
+
+              @Suppress("DEPRECATION")
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  val night = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+                  val bg = if (night) Color.parseColor("#141916") else Color.parseColor("#F3F1EC")
+                  window.statusBarColor = bg
+                  window.navigationBarColor = bg
+                  if (!night) {
+                      window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or 0x10
+                  }
+
+                  web = WebView(this)
+                  web.setBackgroundColor(bg)
+                  setContentView(web)
+
+                  val s = web.settings
+                  s.javaScriptEnabled = true
+                  s.domStorageEnabled = true
+                  s.allowFileAccess = false
+                  s.cacheMode = WebSettings.LOAD_DEFAULT
+                  s.setSupportZoom(false)
+
+                  val loader = WebViewAssetLoader.Builder()
+                      .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+                      .build()
+                  web.webViewClient = object : WebViewClient() {
+                      override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                          return loader.shouldInterceptRequest(request.url)
+                      }
+                  }
+                  web.webChromeClient = object : WebChromeClient() {
+                      override fun onShowFileChooser(
+                          w: WebView,
+                          cb: ValueCallback<Array<Uri>>,
+                          params: FileChooserParams
+                      ): Boolean {
+                          chooser?.onReceiveValue(null)
+                          chooser = cb
+                          val i = try {
+                              params.createIntent()
+                          } catch (e: Exception) {
+                              Intent(Intent.ACTION_GET_CONTENT).apply {
+                                  type = "image/*"
+                                  addCategory(Intent.CATEGORY_OPENABLE)
+                              }
+                          }
+                          return try {
+                              startActivityForResult(i, 77)
+                              true
+                          } catch (e: Exception) {
+                              chooser = null
+                              false
+                          }
+                      }
+                  }
+                  web.loadUrl("https://appassets.androidplatform.net/assets/index.html")
+              }
+
+              @Suppress("DEPRECATION")
+              override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+                  if (requestCode == 77) {
+                      chooser?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data))
+                      chooser = null
+                  } else {
+                      super.onActivityResult(requestCode, resultCode, data)
+                  }
+              }
+
+              @Suppress("DEPRECATION")
+              override fun onBackPressed() {
+                  web.evaluateJavascript("(window.appBack ? appBack() : false)") { r ->
+                      if (r != "true") finish()
+                  }
+              }
+
+              override fun onResume() { super.onResume(); web.onResume() }
+              override fun onPause() { web.onPause(); super.onPause() }
+          }
+          PATH_EOF
+          mkdir -p chesspuz-app/app/src/main/res/drawable
+          cat > chesspuz-app/app/src/main/res/drawable/ic_launcher_background.xml <<'PATH_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path android:fillColor="#2E2087" android:pathData="M0,0h108v108h-108z" />
+              <path android:fillColor="#3B2BA6" android:pathData="M18,0h18v18h-18z M54,0h18v18h-18z M90,0h18v18h-18z M0,18h18v18h-18z M36,18h18v18h-18z M72,18h18v18h-18z M18,36h18v18h-18z M54,36h18v18h-18z M90,36h18v18h-18z M0,54h18v18h-18z M36,54h18v18h-18z M72,54h18v18h-18z M18,72h18v18h-18z M54,72h18v18h-18z M90,72h18v18h-18z M0,90h18v18h-18z M36,90h18v18h-18z M72,90h18v18h-18z" />
+              <path android:fillColor="#7C66F2" android:fillAlpha="0.55" android:pathData="M54,56 m-31,0 a31,31 0 1,0 62,0 a31,31 0 1,0 -62,0 Z" />
+          </vector>
+          PATH_EOF
+          mkdir -p chesspuz-app/app/src/main/res/drawable
+          cat > chesspuz-app/app/src/main/res/drawable/ic_launcher_foreground.xml <<'PATH_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path android:fillColor="#F7F7FF" android:strokeColor="#1A1650" android:strokeWidth="2" android:strokeLineJoin="round" android:pathData="M 42.80,67.88 C 42.24,59.48 44.48,53.88 50.08,49.40 C 46.72,49.40 44.48,50.52 42.24,52.76 C 40.00,55.00 37.20,54.44 36.64,51.64 C 36.64,47.16 41.68,41.00 47.28,37.64 L 48.40,31.48 L 52.88,35.40 C 54.56,34.84 56.24,34.84 57.36,35.40 L 61.28,31.48 L 62.40,37.64 C 67.44,42.12 68.56,50.52 66.88,58.36 L 65.76,67.88 Z" />
+              <path android:fillColor="#F7F7FF" android:strokeColor="#1A1650" android:strokeWidth="2" android:strokeLineJoin="round" android:pathData="M 37.76,77.96 Q 37.76,72.92 42.80,72.92 H 65.20 Q 70.24,72.92 70.24,77.96 Z" />
+              <path android:fillColor="#F7F7FF" android:strokeColor="#1A1650" android:strokeWidth="2" android:strokeLineJoin="round" android:pathData="M 45.04,67.88 H 62.96 Q 65.76,67.88 65.76,70.68 Q 65.76,73.48 62.96,73.48 H 45.04 Q 42.24,73.48 42.24,70.68 Q 42.24,67.88 45.04,67.88 Z" />
+              <path android:strokeColor="#1A1650" android:strokeWidth="1.6" android:strokeLineCap="round" android:pathData="M 57.36,39.32 C 60.72,43.80 61.28,50.52 59.60,56.12" />
+              <path android:fillColor="#1A1650" android:pathData="M49.97,42.12 a1.79,1.79 0 1,0 3.58,0 a1.79,1.79 0 1,0 -3.58,0 Z M37.65,51.08 a1.23,1.23 0 1,0 2.46,0 a1.23,1.23 0 1,0 -2.46,0 Z" />
+              <path android:fillColor="#FFC93C" android:strokeColor="#1A1650" android:strokeWidth="1" android:strokeLineJoin="round" android:pathData="M83.00,20.00 L86.15,25.85 L92.00,29.00 L86.15,32.15 L83.00,38.00 L79.85,32.15 L74.00,29.00 L79.85,25.85 Z" />
+              <path android:fillColor="#FFC93C" android:pathData="M26.00,29.00 L27.75,32.25 L31.00,34.00 L27.75,35.75 L26.00,39.00 L24.25,35.75 L21.00,34.00 L24.25,32.25 Z" />
+          </vector>
+          PATH_EOF
+          mkdir -p chesspuz-app/app/src/main/res/mipmap-anydpi-v26
+          cat > chesspuz-app/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml <<'PATH_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@drawable/ic_launcher_background" />
+              <foreground android:drawable="@drawable/ic_launcher_foreground" />
+          </adaptive-icon>
+          PATH_EOF
+          mkdir -p chesspuz-app/app/src/main/res/mipmap-anydpi-v26
+          cat > chesspuz-app/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml <<'PATH_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@drawable/ic_launcher_background" />
+              <foreground android:drawable="@drawable/ic_launcher_foreground" />
+          </adaptive-icon>
+          PATH_EOF
+          mkdir -p chesspuz-app/app/src/main/res/values
+          cat > chesspuz-app/app/src/main/res/values/strings.xml <<'PATH_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">দাবা পাজল</string>
+          </resources>
+          PATH_EOF
+          cat > chesspuz-app/build.gradle.kts <<'PATH_EOF'
+          plugins {
+              id("com.android.application") version "8.5.2" apply false
+              id("org.jetbrains.kotlin.android") version "1.9.24" apply false
+          }
+          PATH_EOF
+          cat > chesspuz-app/gradle.properties <<'PATH_EOF'
+          org.gradle.jvmargs=-Xmx2g -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          android.nonTransitiveRClass=true
+          kotlin.code.style=official
+          PATH_EOF
+          cat > chesspuz-app/settings.gradle.kts <<'PATH_EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "ChessPuz"
+          include(":app")
+          PATH_EOF
+
+      - name: Fetch California chess pieces
+        run: |
+          mkdir -p chesspuz-app/app/src/main/assets/pieces
+          BASE=https://raw.githubusercontent.com/lichess-org/lila/master/public/piece/california
+          for p in wP wN wB wR wQ wK bP bN bB bR bQ bK; do
+            curl -fsSL --retry 3 "$BASE/$p.svg" -o "chesspuz-app/app/src/main/assets/pieces/$p.svg" || { echo "FAILED $p"; exit 1; }
+          done
+          ls -la chesspuz-app/app/src/main/assets/pieces
+
+      - name: Fetch Stockfish engine
+        continue-on-error: true
+        run: |
+          rm -rf sfpkg && mkdir sfpkg && cd sfpkg
+          npm pack stockfish
+          tar xzf stockfish-*.tgz
+          cat > pick_engine.py <<'PICK_EOF'
+          import os, json, shutil
+          src = 'package/src' if os.path.isdir('package/src') else 'package'
+          dst = '../chesspuz-app/app/src/main/assets'
+          files = os.listdir(src)
+          print('ENGINE FILES:', sorted(files))
+          js = [f for f in files if f.endswith('.js') and 'worker' not in f.lower() and 'node' not in f.lower()]
+          def score(f):
+              s = 0
+              if 'lite' in f: s -= 4
+              if 'single' in f: s -= 3
+              if 'asm' in f: s += 5
+              return s
+          cands = sorted(js, key=score)
+          chosen = None
+          for f in cands:
+              stem = f[:-3]
+              w = [x for x in files if x.endswith('.wasm') and x.startswith(stem)]
+              if w and 'single' in f:
+                  chosen = (f, w[0]); break
+          if not chosen:
+              for f in cands:
+                  if 'asm' in f:
+                      chosen = (f, ''); break
+          if chosen:
+              shutil.copy(os.path.join(src, chosen[0]), os.path.join(dst, chosen[0]))
+              if chosen[1]:
+                  shutil.copy(os.path.join(src, chosen[1]), os.path.join(dst, chosen[1]))
+              json.dump({'js': chosen[0], 'wasm': chosen[1]}, open(os.path.join(dst, 'engine.json'), 'w'))
+              print('ENGINE CHOSEN:', chosen)
+          else:
+              print('WARNING: no usable Stockfish file found, app will use the basic engine')
+          PICK_EOF
+          python3 pick_engine.py
+          ls -la ../chesspuz-app/app/src/main/assets
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.7
+
+      - name: Build debug APK
+        working-directory: chesspuz-app
+        run: gradle assembleDebug --no-daemon
+
+      - name: Rename APK
+        run: cp chesspuz-app/app/build/outputs/apk/debug/app-debug.apk chesspuz.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chesspuz-apk
+          path: chesspuz.apk
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: chesspuz-v${{ github.run_number }}
+          name: দাবা পাজল v${{ github.run_number }}
+          files: chesspuz.apk
