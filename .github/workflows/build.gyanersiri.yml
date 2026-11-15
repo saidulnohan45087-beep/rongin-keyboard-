@@ -1,0 +1,683 @@
+name: Build Gyaner Singri APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Write app
+        run: |
+          mkdir -p www
+          cat > www/index.html <<'GS_EOF'
+          <!doctype html><html lang="bn"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style></head><body><title>জ্ঞানের সিঁড়ি</title>
+          <meta name="claude:viewport-fit-sides" content="cover">
+          <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Tiro+Bangla&display=swap">
+          <style>
+          :root{
+            /* Layout: single column quiz stage. Night-blue studio with light beams, gold-rimmed hexagon buttons, blue option plates. */
+            --bg0:#060a24; --bg1:#0e1650; --panel:#0b1240; --line:#2a3a9a;
+            --gold:#f5b82e; --gold2:#ffe08a; --blue:#38bdf8; --fg:#eef2ff; --muted:#9aa6d8;
+            --ok:#16a34a; --bad:#dc2626; --warn:#f59e0b;
+            --display:'Tiro Bangla','Hind Siliguri',Georgia,serif;
+            --body:'Hind Siliguri','Noto Sans Bengali',system-ui,sans-serif;
+            color-scheme:dark;
+          }
+          *{box-sizing:border-box}
+          html{background:var(--bg0)}
+          body{margin:0;min-height:100%;color:var(--fg);font:400 16px/1.55 var(--body);
+            background:radial-gradient(ellipse at 50% -10%,#25349e 0%,var(--bg1) 45%,var(--bg0) 100%) fixed;
+            padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:10px 40px}
+          body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+            background:
+             conic-gradient(from 168deg at 18% -8%,rgba(150,185,255,.16) 0 14deg,transparent 14deg),
+             conic-gradient(from 178deg at 82% -8%,rgba(150,185,255,.16) 0 14deg,transparent 14deg),
+             conic-gradient(from 173deg at 50% -12%,rgba(255,224,138,.13) 0 14deg,transparent 14deg)}
+          .app{position:relative;z-index:1;max-width:560px;margin:0 auto}
+          h2{font:400 22px/1.3 var(--display);margin:6px 0 8px;color:var(--gold2)}
+          p{margin:0 0 10px}
+          .lead{color:var(--muted);font-size:15px}
+          .small{font-size:13px;color:var(--muted)}
+          button{font-family:inherit}
+          button:focus-visible,label:focus-within,input:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+          .vh{position:absolute;opacity:0;width:1px;height:1px;overflow:hidden}
+
+          /* hexagon plates */
+          .hex{--cut:16px;display:block;width:100%;border:0;padding:2px;cursor:pointer;color:var(--fg);text-align:center;
+            background:linear-gradient(var(--gold2),var(--gold) 50%,#a87a10);
+            clip-path:polygon(var(--cut) 0,calc(100% - var(--cut)) 0,100% 50%,calc(100% - var(--cut)) 100%,var(--cut) 100%,0 50%);touch-action:manipulation}
+          .hex>span{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:0;min-height:54px;padding:8px 26px;
+            background:linear-gradient(#2a7ae8,#0b3d9c 55%,#0a2f7a);
+            clip-path:polygon(var(--cut) 0,calc(100% - var(--cut)) 0,100% 50%,calc(100% - var(--cut)) 100%,var(--cut) 100%,0 50%)}
+          .hex b{font:600 19px/1.3 var(--body)}
+          .hex small{font-size:12px;color:#cfe0ff}
+          .hex.sel>span{background:linear-gradient(#ffb84a,#e07a00)}
+          .hex.ok>span{background:linear-gradient(#34d27a,#0f8a45)}
+          .hex.bad>span{background:linear-gradient(#ff6b6b,#b91c1c)}
+          .hex[disabled]{cursor:default}
+          .hex.dim{filter:grayscale(.75) brightness(.7)}
+          .hex.gone{visibility:hidden}
+          .menu{display:flex;flex-direction:column;gap:14px;margin:14px 0 18px}
+          .logo{display:flex;justify-content:center;margin-top:8px}
+          .logo svg{display:block;filter:drop-shadow(0 8px 24px rgba(0,0,0,.5))}
+          .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+          .btn{min-height:46px;padding:0 18px;border-radius:10px;border:1px solid var(--line);background:#16227a;color:var(--fg);font:600 15px/1.2 var(--body);cursor:pointer;touch-action:manipulation}
+          .btn.gold{background:linear-gradient(var(--gold2),var(--gold));border-color:var(--gold);color:#2a1d00}
+          .btn.red{background:#7f1d1d;border-color:#b91c1c}
+          .btn:disabled{opacity:.45;cursor:default}
+          .btn.wide{width:100%}
+          .back{background:none;border:0;color:var(--muted);font:500 15px var(--body);min-height:44px;padding:0;cursor:pointer}
+
+          /* stats */
+          .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:6px}
+          .stat{border-top:2px solid var(--gold);padding-top:6px}
+          .stat b{display:block;font-size:19px;font-variant-numeric:tabular-nums}
+          .stat span{font-size:12px;color:var(--muted)}
+
+          /* add */
+          .seg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:12px 0}
+          .seg button{min-height:44px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--muted);font:600 15px var(--body);cursor:pointer}
+          .seg button.on{background:#16227a;color:var(--fg);border-color:var(--gold)}
+          .drop{display:flex;flex-direction:column;gap:2px;align-items:center;justify-content:center;text-align:center;min-height:110px;padding:14px;border:2px dashed var(--line);border-radius:14px;cursor:pointer;background:rgba(10,18,64,.5)}
+          .drop b{font-size:17px;color:var(--gold2)}
+          .drop span{font-size:13px;color:var(--muted)}
+          .thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+          .thumbs figure{position:relative;margin:0;width:72px;height:92px;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+          .thumbs img{width:100%;height:100%;object-fit:cover;display:block}
+          .thumbs button{position:absolute;top:2px;right:2px;width:24px;height:24px;border-radius:12px;border:0;background:rgba(0,0,0,.7);color:#fff;font-size:14px;cursor:pointer;line-height:1}
+          .field{display:flex;flex-direction:column;gap:4px;margin-top:14px}
+          .field label{font-size:13px;color:var(--muted)}
+          input[type=text],input[type=number],textarea{width:100%;min-height:46px;border-radius:10px;border:1px solid var(--line);background:#0a1250;color:var(--fg);font:400 16px var(--body);padding:8px 12px}
+          textarea{min-height:150px;resize:vertical}
+          .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+          .warn{border:1px solid var(--warn);color:#ffd9a0;border-radius:10px;padding:10px 12px;font-size:14px;margin-top:12px}
+          .pbar{height:10px;border-radius:5px;background:#16227a;overflow:hidden;margin:12px 0}
+          .pbar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--gold),var(--gold2));transition:width .4s}
+          .glog{font-size:14px;color:var(--muted);max-height:160px;overflow:auto;margin:8px 0 14px}
+          .glog p{margin:0 0 4px}
+
+          /* bank */
+          .src{border-bottom:1px solid var(--line);padding:12px 0}
+          .src b{font-size:17px}
+          .src details{margin-top:8px}
+          .src summary{cursor:pointer;color:var(--gold2);font-size:14px;min-height:36px;display:flex;align-items:center}
+          .qi{padding:8px 0;border-top:1px dashed var(--line);font-size:14px}
+          .qi i{font-style:normal;color:var(--ok);font-weight:600}
+
+          /* game */
+          .gtop{display:flex;align-items:center;gap:12px}
+          .badge{flex:none;width:58px;height:58px;border-radius:50%;border:3px solid var(--gold);background:radial-gradient(circle at 40% 30%,#2c4ad8,#0a1a70);display:flex;align-items:center;justify-content:center;font:700 24px var(--body);color:#fff}
+          .gtop .info{min-width:0;flex:1}
+          .gtop .info b{display:block;font-size:20px;color:var(--gold2);font-variant-numeric:tabular-nums}
+          .gtop .info span{font-size:13px;color:var(--muted)}
+          .iconbtn{min-width:44px;min-height:44px;border-radius:10px;border:1px solid var(--line);background:#101a66;color:var(--fg);cursor:pointer;font-size:14px;font-weight:600}
+          .segs{display:flex;gap:3px;margin:12px 0 10px}
+          .segs i{flex:1;height:7px;border-radius:2px;background:#1a2680}
+          .segs i.done{background:var(--ok)} .segs i.cur{background:var(--gold)} .segs i.safe{box-shadow:0 0 0 1px var(--gold2) inset}
+          .lives{display:flex;gap:12px;justify-content:center;margin:8px 0 14px}
+          .life{position:relative;width:62px;height:52px;border-radius:26px;border:2px solid var(--gold);background:radial-gradient(circle at 40% 30%,#2c4ad8,#0a1a70);color:#fff;font:700 13px/1.1 var(--body);cursor:pointer;touch-action:manipulation}
+          .life:disabled{opacity:.35;cursor:default}
+          .life.used::after{content:"";position:absolute;left:8px;right:8px;top:50%;height:3px;background:var(--bad);transform:rotate(-20deg)}
+          .qbox{--cut:22px;margin-bottom:12px}
+          .qbox>span{min-height:118px;padding:16px 30px}
+          .qbox .tag{font-size:12px;color:var(--gold2);letter-spacing:.02em}
+          .qbox .qt{font:500 19px/1.5 var(--body);text-wrap:balance}
+          .opts{display:grid;grid-template-columns:1fr;gap:10px}
+          @media (min-width:560px){.opts{grid-template-columns:1fr 1fr}}
+          .opt>span{flex-direction:row;justify-content:flex-start;gap:12px;min-height:56px}
+          .opt .lt{font-style:normal;color:var(--gold2);font-weight:700;flex:none}
+          .opt em{font-style:normal;text-align:left;font-size:16px;line-height:1.35;flex:1;min-width:0}
+          .opt .pc{flex:none;font-size:14px;color:#fff;background:rgba(0,0,0,.35);border-radius:6px;padding:0 6px}
+          .exp{margin-top:14px;border-left:4px solid var(--ok);background:rgba(10,18,64,.7);padding:10px 14px;border-radius:0 10px 10px 0}
+          .exp.bad{border-left-color:var(--bad)}
+          .exp b{display:block}
+          .ladder{margin-top:14px}
+          .ladder summary{cursor:pointer;color:var(--gold2);font-size:14px;min-height:40px;display:flex;align-items:center}
+          .ladder ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column-reverse}
+          .ladder li{display:flex;justify-content:space-between;padding:3px 10px;font-size:14px;font-variant-numeric:tabular-nums;border-radius:6px}
+          .ladder li.cur{background:var(--gold);color:#2a1d00;font-weight:700}
+          .ladder li.safe{color:var(--gold2)}
+          .ladder li.done{color:#7be0a5}
+
+          /* over */
+          .prize{font:700 38px/1.2 var(--body);color:var(--gold2);text-align:center;margin:6px 0}
+          .center{text-align:center}
+          .rev{margin-top:14px}
+          .rev summary{cursor:pointer;color:var(--gold2);min-height:44px;display:flex;align-items:center}
+          .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#0a1250;border:1px solid var(--gold);color:var(--fg);padding:10px 16px;border-radius:10px;z-index:50;max-width:90%;font-size:14px;text-align:center}
+          @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+          </style>
+
+          <div class="app" id="app"></div>
+
+          <script>
+          (function(){
+          'use strict';
+          var BN='০১২৩৪৫৬৭৮৯';
+          function bn(n){return String(n).replace(/\d/g,function(d){return BN.charAt(+d);});}
+          function money(n){var s=String(n),l=s.slice(-3),r=s.slice(0,-3);if(r)r=r.replace(/\B(?=(\d{2})+(?!\d))/g,',')+',';return '৳ '+bn(r+l);}
+          function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+          function $(s){return document.querySelector(s);}
+          function shuffle(a){for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1)),t=a[i];a[i]=a[j];a[j]=t;}return a;}
+          function dayKey(d){d=d||new Date();return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
+          var LS={get:function(k,d){try{var v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch(e){return d;}},set:function(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}};
+          var LET=['ক','খ','গ','ঘ'];
+          var STANDALONE=!(window.claude&&window.claude.use),pushed=false;
+          var PR=[500,1000,2000,5000,10000,20000,40000,80000,160000,320000,640000,1250000,2500000,5000000,10000000];
+
+          var app=$('#app');
+          var A={screen:'home',sources:LS.get('gs-src',[]),stats:LS.get('gs-stats',null),sample:null,limits:null};
+          if(!A.stats)A.stats={played:0,best:0,right:0,asked:0,days:[]};
+          var AD={tab:'img',imgs:[],pdf:null,pdfName:'',pages:0,from:1,to:1,text:'',title:'',stage:'form',log:[],cnt:0,pct:0,msg:'',ctl:null,stop:false,newId:null};
+          var G=null, col=null, wq=Promise.resolve(), mute=LS.get('gs-mute',false), AC=null;
+
+          /* ---------- storage ---------- */
+          function persistLocal(){LS.set('gs-src',A.sources);LS.set('gs-stats',A.stats);}
+          function putDoc(id,data){if(!col)return;wq=wq.then(function(){return col.doc(id).set(data);}).catch(function(){});}
+          function saveSource(s){persistLocal();putDoc('s_'+s.id,s);}
+          function saveStats(){persistLocal();putDoc('stats',A.stats);}
+          function delSource(id){A.sources=A.sources.filter(function(s){return s.id!==id;});persistLocal();
+            if(col)wq=wq.then(function(){return col.doc('s_'+id).delete();}).catch(function(){});}
+          function withTimeout(p,ms){return new Promise(function(res,rej){var t=setTimeout(function(){rej(new Error('timeout'));},ms);p.then(function(v){clearTimeout(t);res(v);},function(e){clearTimeout(t);rej(e);});});}
+          async function initCloud(){
+            try{
+              if(!window.claude||!window.claude.use)return;
+              var r=await Promise.all([claude.use('db'),claude.use('user')]),db=r[0],user=r[1];
+              if(!db||!user)return;
+              var id=await user.id();if(!id)return;
+              col=db.collection('data/users/'+id);
+              var snap=await withTimeout(col.get(),10000),srcs=[],st=null;
+              snap.docs.forEach(function(d){var x=d.data();if(!x)return;if(d.id==='stats')st=x;else if(d.id.indexOf('s_')===0&&x.qs)srcs.push(x);});
+              if(srcs.length||st){
+                A.sources=srcs.sort(function(a,b){return (b.created||0)-(a.created||0);});
+                if(st){A.stats={played:st.played||0,best:st.best||0,right:st.right||0,asked:st.asked||0,days:st.days||[]};}
+                persistLocal();
+              }else if(A.sources.length){A.sources.forEach(function(s){putDoc('s_'+s.id,s);});putDoc('stats',A.stats);}
+              if(A.screen==='home'||A.screen==='bank')render();
+            }catch(e){col=null;}
+          }
+          /* standalone (APK) mode: no Claude runtime, so the page calls the Anthropic API with a key the user saves on the phone */
+          function b64(blob){return new Promise(function(res,rej){var r=new FileReader();r.onload=function(){res(String(r.result).split(',')[1]);};r.onerror=function(){rej(new Error('read'));};r.readAsDataURL(blob);});}
+          function apiErr(code,msg){return {code:code,message:msg||code};}
+          function parseJson(t){
+            try{return JSON.parse(t);}catch(e){}
+            var m=t.match(/```(?:json)?\s*([\s\S]*?)```/);if(m){try{return JSON.parse(m[1]);}catch(e){}}
+            var a=t.indexOf('['),z=t.lastIndexOf(']');if(a>=0&&z>a){try{return JSON.parse(t.slice(a,z+1));}catch(e){}}
+            throw apiErr('invalid_json');
+          }
+          function apiSample(key){
+            var f=function(){return Promise.reject(apiErr('invalid_request'));};
+            f.limits=function(){return Promise.resolve({maxPromptBytes:262144,images:{maxCount:4,maxInputBytes:20000000,mediaTypes:['image/jpeg','image/png','image/webp']}});};
+            f.json=async function(prompt,opts){
+              opts=opts||{};
+              var content=[],i;
+              if(opts.images){for(i=0;i<opts.images.length;i++){var b=opts.images[i];content.push({type:'image',source:{type:'base64',media_type:(b.type&&b.type.indexOf('image/')===0)?b.type:'image/jpeg',data:await b64(b)}});}}
+              content.push({type:'text',text:prompt});
+              var res;
+              try{
+                res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',signal:opts.signal,
+                  headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+                  body:JSON.stringify({model:'claude-sonnet-5-5',max_tokens:6000,messages:[{role:'user',content:content}]})});
+              }catch(e){throw apiErr(e&&e.name==='AbortError'?'cancelled':'upstream_error');}
+              if(!res.ok){
+                var j=null;try{j=await res.json();}catch(e){}
+                var em=String(j&&j.error&&j.error.message||'').toLowerCase();
+                var c=res.status===401||res.status===403?'not_granted':res.status===429?'rate_limited':
+                  (res.status===400&&em.indexOf('credit')>=0)?'no_credit':(res.status===400||res.status===413)?'image_rejected':'upstream_error';
+                throw apiErr(c,String(res.status));
+              }
+              var data=await res.json(),txt=(data.content||[]).map(function(x){return x.text||'';}).join('');
+              return parseJson(txt);
+            };
+            return f;
+          }
+          function setupKey(){
+            var k=LS.get('gs-key','');
+            if(k){A.sample=apiSample(k);A.limits={images:{maxCount:4}};}else{A.sample=null;}
+          }
+          async function initSample(){
+            try{
+              if(window.claude&&window.claude.use){
+                A.sample=await claude.use('sample');
+                if(A.sample){try{A.limits=await A.sample.limits();}catch(e){A.limits=null;}}
+              }else setupKey();
+              if(A.screen==='add')render();
+            }catch(e){}
+          }
+
+          /* ---------- sound ---------- */
+          function tone(f,d,type,at,vol){
+            try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+              var o=AC.createOscillator(),g=AC.createGain(),t=AC.currentTime+(at||0);
+              o.type=type||'sine';o.frequency.value=f;g.gain.setValueAtTime(vol||0.12,t);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+              o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+d+0.02);}catch(e){}
+          }
+          function sfx(k){
+            if(mute)return;
+            if(k==='click')tone(520,0.06,'triangle');
+            else if(k==='ok'){tone(660,0.14,'sine');tone(880,0.28,'sine',0.13);}
+            else if(k==='bad'){tone(180,0.5,'sawtooth',0,0.1);}
+            else if(k==='win'){[523,659,784,1046].forEach(function(f,i){tone(f,0.25,'sine',i*0.14);});}
+          }
+
+          /* ---------- helpers ---------- */
+          function toast(m){var t=document.createElement('div');t.className='toast';t.textContent=m;document.body.appendChild(t);setTimeout(function(){t.remove();},2800);}
+          function totalQ(){var n=0;A.sources.forEach(function(s){n+=s.qs.length;});return n;}
+          function streak(){
+            var set={};A.stats.days.forEach(function(d){set[d]=1;});
+            var d=new Date(),n=0;
+            if(!set[dayKey(d)])d.setDate(d.getDate()-1);
+            while(set[dayKey(d)]){n++;d.setDate(d.getDate()-1);}
+            return n;
+          }
+          function hexbtn(act,label,sub,dis,extra){
+            return '<button class="hex'+(dis?' dim':'')+(extra?' '+extra:'')+'" data-act="'+act+'"'+(dis?' disabled':'')+'><span><b>'+label+'</b>'+(sub?'<small>'+sub+'</small>':'')+'</span></button>';
+          }
+          function go(s){
+            var prev=A.screen;A.screen=s;
+            if(STANDALONE){
+              if(s!=='home'&&prev==='home'){try{history.pushState({},'');pushed=true;}catch(e){}}
+              else if(s==='home'&&pushed){pushed=false;try{history.back();}catch(e){}}
+            }
+            render();window.scrollTo(0,0);
+          }
+          var LOGO='<svg viewBox="0 0 200 200" width="176" height="176" aria-hidden="true"><defs><radialGradient id="lg" cx="50%" cy="40%" r="70%"><stop offset="0" stop-color="#3b4fd0"/><stop offset="1" stop-color="#0a1250"/></radialGradient><linearGradient id="gd" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe08a"/><stop offset="1" stop-color="#b8860b"/></linearGradient></defs>'
+           +'<circle cx="100" cy="100" r="95" fill="url(#gd)"/><circle cx="100" cy="100" r="87" fill="url(#lg)"/><circle cx="100" cy="100" r="76" fill="none" stroke="#f5b82e" stroke-width="1.4" stroke-dasharray="2 6"/>'
+           +'<text x="100" y="88" text-anchor="middle" font-family="Tiro Bangla,Hind Siliguri,serif" font-size="30" fill="#ffe08a">জ্ঞানের</text>'
+           +'<text x="100" y="124" text-anchor="middle" font-family="Tiro Bangla,Hind Siliguri,serif" font-size="36" fill="#ffffff">সিঁড়ি</text>'
+           +'<path d="M58 152h20v-9h20v-9h20v-9h20v-9" stroke="#f5b82e" stroke-width="3.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+          /* ---------- views: home / bank ---------- */
+          function viewHome(){
+            var n=totalQ(),st=A.stats,played=st.days.indexOf(dayKey())>=0,sk=streak();
+            return '<div class="logo">'+LOGO+'</div><div class="menu">'
+             +hexbtn('play','খেলা শুরু',n>=5?bn(n)+'টি প্রশ্ন তৈরি':'আগে একটা পৃষ্ঠা যোগ করো',n<5)
+             +hexbtn('add','পৃষ্ঠা যোগ করো','ছবি · পিডিএফ · লেখা')
+             +hexbtn('bank','প্রশ্নভাণ্ডার',bn(A.sources.length)+'টি উৎস')+'</div>'
+             +'<div class="stats"><div class="stat"><b>'+(st.best?money(st.best):'–')+'</b><span>সর্বোচ্চ জিত</span></div>'
+             +'<div class="stat"><b>'+bn(sk)+' দিন</b><span>টানা খেলা'+(played?' · আজ খেলেছ':'')+'</span></div>'
+             +'<div class="stat"><b>'+(st.asked?bn(Math.round(st.right*100/st.asked))+'%':'–')+'</b><span>ঠিক উত্তর</span></div></div>'
+             +'<div class="row" style="margin-top:16px"><button class="btn" data-act="mute">'+(mute?'শব্দ বন্ধ':'শব্দ চালু')+'</button></div>';
+          }
+          function viewBank(){
+            var h='<button class="back" data-act="home">← ঘরে ফিরি</button><h2>প্রশ্নভাণ্ডার</h2>';
+            if(!A.sources.length)return h+'<p class="lead">এখনো কোনো পৃষ্ঠা যোগ করোনি।</p><button class="btn gold" data-act="add">পৃষ্ঠা যোগ করো</button>';
+            A.sources.forEach(function(s){
+              var dt=new Date(s.created||Date.now()),ds=bn(dt.getDate())+'/'+bn(dt.getMonth()+1);
+              h+='<div class="src"><b>'+esc(s.title)+'</b><div class="small">'+ds+' · '+bn(s.qs.length)+'টি প্রশ্ন</div><div class="row" style="margin-top:8px">'
+               +'<button class="btn gold" data-act="playsrc" data-id="'+esc(s.id)+'"'+(s.qs.length<5?' disabled':'')+'>এখান থেকে খেলো</button>'
+               +'<button class="btn" data-act="delsrc" data-id="'+esc(s.id)+'">মুছো</button></div>'
+               +'<details><summary>প্রশ্ন ও উত্তর পড়ো ('+bn(s.qs.length)+')</summary>';
+              s.qs.forEach(function(q){h+='<div class="qi">'+esc(q.q)+'<br><i>উত্তর: '+esc(q.o[q.a])+'</i>'+(q.e?'<div class="small">'+esc(q.e)+'</div>':'')+'</div>';});
+              h+='</details></div>';
+            });
+            return h;
+          }
+
+          /* ---------- views: add / generate ---------- */
+          function viewAdd(){
+            if(AD.stage!=='form')return viewGen();
+            var h='<button class="back" data-act="home">← ঘরে ফিরি</button><h2>পৃষ্ঠা যোগ করো</h2><p class="lead">যে পৃষ্ঠা পড়ার সময় পাওনি, তার ছবি বা পিডিএফ দাও। প্রশ্ন শুধু ওই পৃষ্ঠার তথ্য থেকে বানানো হবে।</p>';
+            if(STANDALONE){
+              h+='<div class="field"><label for="adKey">Claude API চাবি'+(A.sample?' (সেভ করা আছে)':'')+'</label><div class="row"><input id="adKey" type="password" autocomplete="off" placeholder="sk-ant-..." style="flex:1;min-width:0"><button class="btn" data-act="savekey">সেভ</button></div><p class="small" style="margin-top:6px">চাবিটা শুধু এই ফোনে থাকে। console.anthropic.com থেকে বানানো যায়, আর সেখানে ক্রেডিট লাগে।</p></div>';
+              if(!A.sample)h+='<div class="warn">প্রশ্ন বানাতে আগে উপরে API চাবি সেভ করো।</div>';
+            }else if(!A.sample)h+='<div class="warn">এই ভিউতে Claude সংযোগ পাওয়া যাচ্ছে না। লিংকটা Claude অ্যাপ বা claude.ai-তে সাইন-ইন করা অবস্থায় খোলো।</div>';
+            h+='<div class="seg">';
+            [['img','ছবি'],['pdf','পিডিএফ'],['text','লেখা']].forEach(function(t){h+='<button data-act="tab" data-t="'+t[0]+'" class="'+(AD.tab===t[0]?'on':'')+'">'+t[1]+'</button>';});
+            h+='</div>';
+            var ready=false;
+            if(AD.tab==='img'){
+              h+='<label class="drop" for="fImg"><b>পৃষ্ঠার ছবি তোলো বা বাছো</b><span>একসাথে অনেকগুলো দেওয়া যায় (সর্বোচ্চ ২০টি)</span></label><input class="vh" id="fImg" type="file" accept="image/*" multiple>';
+              if(AD.imgs.length){h+='<div class="thumbs">';AD.imgs.forEach(function(it,i){h+='<figure><img alt="" src="'+it.url+'"><button data-act="rmimg" data-i="'+i+'" aria-label="সরাও">×</button></figure>';});h+='</div>';}
+              ready=AD.imgs.length>0;
+            }else if(AD.tab==='pdf'){
+              h+='<label class="drop" for="fPdf"><b>'+(AD.pdfName?esc(AD.pdfName):'পিডিএফ বাছো')+'</b><span>'+(AD.pages?bn(AD.pages)+' পৃষ্ঠা':'পুরো পিডিএফ-ও দিতে পারো, পৃষ্ঠা বেছে নেওয়া যাবে')+'</span></label><input class="vh" id="fPdf" type="file" accept="application/pdf">';
+              if(AD.pages){h+='<div class="two field"><div><label for="adFrom">কোন পৃষ্ঠা থেকে</label><input id="adFrom" type="number" min="1" max="'+AD.pages+'" value="'+AD.from+'"></div><div><label for="adTo">কোন পৃষ্ঠা পর্যন্ত</label><input id="adTo" type="number" min="1" max="'+AD.pages+'" value="'+AD.to+'"></div></div><p class="small" style="margin-top:6px">একবারে সর্বোচ্চ ৩০ পৃষ্ঠা। বেশি হলে কয়েক ভাগে যোগ করো।</p>';}
+              ready=!!AD.pages;
+            }else{
+              h+='<div class="field"><label for="adText">লেখা পেস্ট করো</label><textarea id="adText" placeholder="অনলাইনের লেখা, নোট বা যেকোনো পাঠ্য এখানে দাও">'+esc(AD.text)+'</textarea></div>';
+              ready=AD.text.trim().length>80;
+            }
+            h+='<div class="field"><label for="adTitle">নাম (না দিলে নিজে বসবে)</label><input id="adTitle" type="text" value="'+esc(AD.title)+'" placeholder="যেমন: ১৫ নভেম্বরের কারেন্ট অ্যাফেয়ার্স"></div>';
+            h+='<div style="margin-top:18px">'+hexbtn('gen','প্রশ্ন বানাও','',!ready||!A.sample)+'</div><p class="small center" style="margin-top:10px">প্রশ্ন বানাতে তোমার Claude ব্যবহারের কিছুটা সীমা খরচ হয়।</p>';
+            return h;
+          }
+          function viewGen(){
+            var h='<h2>'+(AD.stage==='run'?'প্রশ্ন বানানো হচ্ছে':'কাজ শেষ')+'</h2><div class="pbar"><i id="gpBar" style="width:'+AD.pct+'%"></i></div><p id="gpMsg">'+esc(AD.msg)+'</p>'
+             +'<p>এ পর্যন্ত <b id="gpCnt">'+bn(AD.cnt)+'</b>টি প্রশ্ন পেয়েছি।</p><div class="glog" id="gpLog">'+AD.log.map(function(l){return '<p>'+esc(l)+'</p>';}).join('')+'</div>';
+            if(AD.stage==='run')h+='<button class="btn red" data-act="genstop">থামাও</button>';
+            else{
+              h+='<div class="menu">';
+              if(AD.newId&&AD.cnt>=5)h+=hexbtn('playnew','এখনই খেলো','এই পৃষ্ঠার প্রশ্ন থেকে');
+              h+=hexbtn('add2','আরেকটা যোগ করো','')+hexbtn('home','ঘরে ফিরি','')+'</div>';
+            }
+            return h;
+          }
+          function updGen(){
+            var b=$('#gpBar'),m=$('#gpMsg'),c=$('#gpCnt'),l=$('#gpLog');
+            if(b)b.style.width=AD.pct+'%';if(m)m.textContent=AD.msg;if(c)c.textContent=bn(AD.cnt);
+            if(l){l.innerHTML=AD.log.map(function(x){return '<p>'+esc(x)+'</p>';}).join('');l.scrollTop=l.scrollHeight;}
+          }
+          function glog(t){AD.log.push(t);updGen();}
+
+          /* ---------- generation ---------- */
+          function loadPdfJs(){
+            return new Promise(function(res,rej){
+              if(window.pdfjsLib){res();return;}
+              var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+              s.onload=function(){try{window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';res();}catch(e){rej(e);}};
+              s.onerror=function(){rej(new Error('load'));};document.head.appendChild(s);
+            });
+          }
+          function canvasBlob(c){return new Promise(function(res){c.toBlob(function(b){res(b);},'image/jpeg',0.85);});}
+          async function prepImage(file){
+            try{
+              var bm=await createImageBitmap(file,{imageOrientation:'from-image'}),s=Math.min(1,1800/Math.max(bm.width,bm.height));
+              var c=document.createElement('canvas');c.width=Math.round(bm.width*s);c.height=Math.round(bm.height*s);
+              c.getContext('2d').drawImage(bm,0,0,c.width,c.height);
+              var b=await canvasBlob(c);return b||file;
+            }catch(e){return file;}
+          }
+          async function renderPdfPage(n){
+            var page=await AD.pdf.getPage(n),v0=page.getViewport({scale:1}),sc=1700/Math.max(v0.width,v0.height),vp=page.getViewport({scale:sc});
+            var c=document.createElement('canvas');c.width=Math.round(vp.width);c.height=Math.round(vp.height);
+            await page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
+            return canvasBlob(c);
+          }
+          function norm(s){return String(s).replace(/\s+/g,'').toLowerCase();}
+          function cleanQ(o){
+            if(!o||typeof o.q!=='string'||!Array.isArray(o.o)||o.o.length!==4)return null;
+            var opts=o.o.map(function(x){return String(x).trim();}),a=Number(o.a);
+            if(opts.some(function(x){return !x;})||a!==Math.floor(a)||a<0||a>3)return null;
+            var u={};opts.forEach(function(x){u[norm(x)]=1;});if(Object.keys(u).length<4)return null;
+            var q=o.q.trim();if(q.length<8)return null;
+            return {id:Math.random().toString(36).slice(2,9),q:q,o:opts,a:a,d:Math.min(5,Math.max(1,Math.round(Number(o.d))||3)),e:String(o.e||'').slice(0,400),t:String(o.t||'').slice(0,24),n:0,w:0};
+          }
+          function genPrompt(kind,count,text){
+            return 'You are the question writer for a Bangla quiz game in the style of "Who Wants to Be a Millionaire".\n'
+             +(kind==='text'?'Below is source text (Bangla and/or English).':'The attached images are pages (newspaper, magazine, current-affairs book, notes) in Bangla and/or English. Read them carefully.')
+             +'\nWrite up to '+count+' multiple-choice questions based ONLY on facts clearly present in the source: names, dates, places, numbers, decisions, appointments, awards, records. Never use outside knowledge for the question or the correct answer. If the source is unreadable or has no factual content, write fewer questions or none.\n'
+             +'Rules:\n- Write questions, options and notes in Bangla. If the source is English, translate and keep proper names in Bangla with the English name in brackets when helpful. Keep numbers and dates exact.\n'
+             +'- Exactly 4 options, one correct. Wrong options must be plausible and of the same kind as the right answer.\n'
+             +'- Each question must stand alone (never say "according to the passage" or "in the picture").\n'
+             +'- "d" is difficulty from 1 (very easy) to 5 (hard); mix them. Vary the position of the correct option.\n'
+             +'- "e" is one short Bangla sentence stating the fact from the source, used as a revision note.\n'
+             +'- "t" is a one or two word Bangla category such as জাতীয়, আন্তর্জাতিক, অর্থনীতি, খেলা, বিজ্ঞান, নিয়োগ, পুরস্কার.\n'
+             +'Reply with ONLY a JSON array like [{"q":"...","o":["...","...","...","..."],"a":0,"d":2,"e":"...","t":"..."}] where "a" is the index (0-3) of the correct option. Reply [] if nothing usable.'
+             +(kind==='text'?'\n\nSOURCE TEXT:\n'+text:'');
+          }
+          function splitText(t){
+            var parts=t.split(/\n\s*\n/),out=[],cur='';
+            parts.forEach(function(p){if((cur+p).length>5000&&cur){out.push(cur);cur='';}cur+=(cur?'\n\n':'')+p;});
+            if(cur)out.push(cur);
+            return out.slice(0,8);
+          }
+          function dateLabel(){var d=new Date();return bn(d.getDate())+'/'+bn(d.getMonth()+1);}
+          async function runGen(){
+            var sample=A.sample;if(!sample)return;
+            AD.stage='run';AD.log=[];AD.cnt=0;AD.pct=0;AD.msg='শুরু হচ্ছে…';AD.stop=false;AD.newId=null;render();
+            var chunks=[],kind=AD.tab,per=Math.max(1,Math.min(2,(A.limits&&A.limits.images&&A.limits.images.maxCount)||2));
+            try{
+              if(kind==='img'){
+                var us=AD.imgs.slice(0,20).map(function(it){return function(){return prepImage(it.file);};});
+                for(var i=0;i<us.length;i+=per)chunks.push(us.slice(i,i+per));
+              }else if(kind==='pdf'){
+                var from=Math.max(1,AD.from|0),to=Math.min(AD.pages,Math.max(from,AD.to|0));
+                if(to-from>29)to=from+29;
+                var ps=[];for(var p=from;p<=to;p++)(function(p){ps.push(function(){return renderPdfPage(p);});})(p);
+                for(var j=0;j<ps.length;j+=per)chunks.push(ps.slice(j,j+per));
+              }else chunks=splitText(AD.text.trim());
+            }catch(e){glog('পৃষ্ঠা তৈরি করতে পারিনি।');}
+            var found=[],seen={};
+            A.sources.forEach(function(s){s.qs.forEach(function(q){seen[norm(q.q)]=1;});});
+            var stopMsg='';
+            for(var c=0;c<chunks.length;c++){
+              if(AD.stop)break;
+              AD.msg=(kind==='text'?'অংশ ':'পৃষ্ঠা ')+bn(c+1)+'/'+bn(chunks.length)+' পড়ছি…';AD.pct=Math.round(c*100/chunks.length);updGen();
+              var blobs=null,prompt;
+              try{
+                if(kind==='text')prompt=genPrompt('text',8,chunks[c]);
+                else{
+                  blobs=[];for(var k=0;k<chunks[c].length;k++)blobs.push(await chunks[c][k]());
+                  prompt=genPrompt('img',Math.min(10,Math.max(4,blobs.length*4)));
+                }
+                AD.ctl=new AbortController();
+                var out=await sample.json(prompt,kind==='text'?{signal:AD.ctl.signal}:{signal:AD.ctl.signal,images:blobs});
+                var arr=Array.isArray(out)?out:(out&&Array.isArray(out.questions)?out.questions:[]),add=0;
+                arr.forEach(function(o){var q=cleanQ(o);if(q&&!seen[norm(q.q)]){seen[norm(q.q)]=1;found.push(q);add++;}});
+                AD.cnt=found.length;glog((kind==='text'?'অংশ ':'ধাপ ')+bn(c+1)+': '+bn(add)+'টি প্রশ্ন।');
+              }catch(e){
+                var code=e&&e.code;
+                if(code==='cancelled'){break;}
+                if(code==='invalid_json'||code==='empty_completion'||code==='refused'){glog('ধাপ '+bn(c+1)+': এখান থেকে প্রশ্ন পাইনি।');continue;}
+                if(code==='no_credit')stopMsg='API-তে ক্রেডিট নেই। console.anthropic.com-এ ক্রেডিট যোগ করে আবার চেষ্টা করো।';
+                else if(code==='not_granted'||code==='sampling_disabled'||code==='not_declared')stopMsg=STANDALONE?'API চাবিটা ঠিক নেই বা কাজ করছে না। চাবি আবার দাও।':'Claude ব্যবহারের অনুমতি পাওয়া যায়নি।';
+                else if(code==='rate_limited')stopMsg='এখন আর প্রশ্ন বানানো যাচ্ছে না (ব্যবহারের সীমা)। কিছুক্ষণ পরে আবার চেষ্টা করো।';
+                else if(code==='image_rejected'||code==='images_unavailable')stopMsg='ছবিটা পড়া যায়নি। অন্য ছবি বা স্পষ্ট ছবি দিয়ে দেখো।';
+                else stopMsg='মাঝপথে সংযোগ কেটে গেছে। আবার চেষ্টা করো।';
+                break;
+              }
+            }
+            if(found.length){
+              var title=AD.title.trim()||(kind==='img'?'ছবি':kind==='pdf'?'পিডিএফ':'লেখা')+' — '+dateLabel();
+              var src={id:Date.now().toString(36),title:title,kind:kind,created:Date.now(),qs:found.slice(0,120)};
+              A.sources.unshift(src);saveSource(src);AD.newId=src.id;
+              AD.msg=stopMsg||'শেষ। '+bn(src.qs.length)+'টি প্রশ্ন ভাণ্ডারে যোগ হয়েছে।';
+            }else AD.msg=stopMsg||'প্রশ্ন বানানো গেল না। ছবি আরও স্পষ্ট করে তুলে বা লেখা বেশি দিয়ে আবার চেষ্টা করো।';
+            AD.pct=100;AD.stage='done';AD.title='';
+            if(AD.newId){AD.imgs.forEach(function(it){URL.revokeObjectURL(it.url);});AD.imgs=[];AD.text='';AD.pdf=null;AD.pdfName='';AD.pages=0;}
+            if(A.screen==='add')render();
+          }
+
+          /* ---------- game ---------- */
+          function startGame(srcId){
+            var pool=[];
+            A.sources.forEach(function(s){if(srcId&&s.id!==srcId)return;s.qs.forEach(function(q){pool.push({q:q,s:s,score:(q.n||0)-1.5*(q.w||0)+Math.random()*1.6});});});
+            if(pool.length<5){toast('কমপক্ষে ৫টি প্রশ্ন লাগবে। আরও পৃষ্ঠা যোগ করো।');return;}
+            pool.sort(function(a,b){return a.score-b.score;});
+            var N=Math.min(15,pool.length),picked=pool.slice(0,N),extras=pool.slice(N,N+4);
+            picked.forEach(function(r){r.k=r.q.d+Math.random()*0.9;});picked.sort(function(a,b){return a.k-b.k;});
+            var prizes=[],k;for(k=0;k<N;k++)prizes.push(PR[N===1?0:Math.round(k*14/(N-1))]);
+            var safe=N>=6?[Math.round(N/3)-1,Math.round(2*N/3)-1]:[];
+            G={items:picked,extras:extras,i:0,N:N,prizes:prizes,safe:safe,life:{f:true,p:true,s:extras.length>0},locked:false,chosen:-1,revealed:false,hidden:[],poll:null,quit:false,res:[],dirty:{},final:null};
+            prep();go('game');
+          }
+          function prep(){G.cur={perm:shuffle([0,1,2,3])};G.cur.correct=G.cur.perm.indexOf(G.items[G.i].q.a);G.locked=false;G.chosen=-1;G.revealed=false;G.hidden=[];G.poll=null;G.final=null;}
+          function viewGame(){
+            var it=G.items[G.i],q=it.q,j,h='';
+            h+='<div class="gtop"><div class="badge">'+bn(G.i+1)+'</div><div class="info"><b>'+money(G.prizes[G.i])+'</b><span>'+bn(G.i+1)+'/'+bn(G.N)+' নম্বর প্রশ্ন'+(q.t?' · '+esc(q.t):'')+'</span></div>'
+             +'<button class="iconbtn" data-act="mute" aria-label="শব্দ">'+(mute?'নীরব':'শব্দ')+'</button>'
+             +'<button class="iconbtn" data-act="quit"'+(G.revealed?' disabled':'')+'>'+(G.quit?'নিশ্চিত? '+money(G.i?G.prizes[G.i-1]:0)+' নিয়ে থামো':'থামো')+'</button></div>';
+            h+='<div class="segs">';for(j=0;j<G.N;j++)h+='<i class="'+(j<G.i?'done':j===G.i?'cur':'')+(G.safe.indexOf(j)>=0?' safe':'')+'"></i>';h+='</div>';
+            h+='<div class="lives"><button class="life'+(G.life.f?'':' used')+'" data-act="l50"'+(!G.life.f||G.locked?' disabled':'')+'>৫০:৫০</button>'
+             +'<button class="life'+(G.life.p?'':' used')+'" data-act="lpoll"'+(!G.life.p||G.locked?' disabled':'')+'>দর্শক</button>'
+             +'<button class="life'+(G.life.s?'':' used')+'" data-act="lswap"'+(!G.life.s||G.locked?' disabled':'')+'>বদল</button></div>';
+            h+='<div class="hex qbox" style="cursor:default"><span><b class="qt" style="font-weight:500">'+esc(q.q)+'</b></span></div><div class="opts">';
+            for(j=0;j<4;j++){
+              var cls='hex opt';
+              if(G.hidden.indexOf(j)>=0)cls+=' gone';
+              if(G.chosen===j)cls+=G.revealed?(j===G.cur.correct?' ok':' bad'):' sel';
+              else if(G.revealed&&j===G.cur.correct)cls+=' ok';
+              h+='<button class="'+cls+'" data-act="ans" data-j="'+j+'"'+(G.locked?' disabled':'')+'><span><i class="lt">'+LET[j]+'.</i><em>'+esc(q.o[G.cur.perm[j]])+'</em>'+(G.poll&&G.poll[j]!=null?'<b class="pc">'+bn(G.poll[j])+'%</b>':'')+'</span></button>';
+            }
+            h+='</div>';
+            if(G.revealed){
+              var ok=G.chosen===G.cur.correct;
+              h+='<div class="exp'+(ok?'':' bad')+'"><b>'+(ok?'ঠিক উত্তর!':'ভুল হলো। সঠিক উত্তর: '+LET[G.cur.correct]+'. '+esc(q.o[q.a]))+'</b>'+(q.e?'<div class="small" style="color:#cfd8ff">'+esc(q.e)+'</div>':'')+'</div>'
+               +'<div style="margin-top:14px">'+hexbtn('next',G.final?'ফলাফল দেখো':'পরের প্রশ্ন','',false)+'</div>';
+            }
+            h+='<details class="ladder"><summary>টাকার সিঁড়ি দেখো</summary><ol>';
+            for(j=0;j<G.N;j++)h+='<li class="'+(j<G.i?'done':j===G.i?'cur':G.safe.indexOf(j)>=0?'safe':'')+'"><span>'+bn(j+1)+(G.safe.indexOf(j)>=0?' ◆':'')+'</span><span>'+money(G.prizes[j])+'</span></li>';
+            h+='</ol></details>';
+            return h;
+          }
+          function answer(j){
+            if(G.locked||G.hidden.indexOf(j)>=0)return;
+            G.locked=true;G.chosen=j;G.quit=false;sfx('click');render();
+            setTimeout(reveal,1000);
+          }
+          function reveal(){
+            if(!G||G.revealed)return;
+            var it=G.items[G.i],ok=G.chosen===G.cur.correct;
+            G.revealed=true;G.res[G.i]=ok?'ok':'bad';
+            it.q.n=(it.q.n||0)+1;if(!ok)it.q.w=(it.q.w||0)+1;G.dirty[it.s.id]=it.s;
+            if(!ok)G.final='wrong';else if(G.i===G.N-1)G.final='win';
+            sfx(ok?(G.final==='win'?'win':'ok'):'bad');render();
+          }
+          function useFifty(){
+            if(!G.life.f||G.locked)return;
+            var wr=[];for(var j=0;j<4;j++)if(j!==G.cur.correct&&G.hidden.indexOf(j)<0)wr.push(j);
+            shuffle(wr).slice(0,2).forEach(function(j){G.hidden.push(j);});
+            if(G.poll)G.hidden.forEach(function(j){G.poll[j]=null;});
+            G.life.f=false;sfx('click');render();
+          }
+          function usePoll(){
+            if(!G.life.p||G.locked)return;
+            var q=G.items[G.i].q,vis=[],j;for(j=0;j<4;j++)if(G.hidden.indexOf(j)<0)vis.push(j);
+            var base=Math.max(30,Math.min(85,78-q.d*8-G.i*1.5+Math.random()*16)),rest=100-Math.round(base),others=vis.filter(function(x){return x!==G.cur.correct;}),w=others.map(function(){return 0.3+Math.random();}),ws=w.reduce(function(a,b){return a+b;},0),poll=[null,null,null,null],used=0;
+            others.forEach(function(x,i){var v=i===others.length-1?rest-used:Math.round(rest*w[i]/ws);poll[x]=Math.max(0,v);used+=v;});
+            poll[G.cur.correct]=100-others.reduce(function(a,x){return a+poll[x];},0);
+            G.poll=poll;G.life.p=false;sfx('click');render();
+          }
+          function useSwap(){
+            if(!G.life.s||G.locked||!G.extras.length)return;
+            var d=G.items[G.i].q.d,bi=0,bd=99;
+            G.extras.forEach(function(r,i){var x=Math.abs(r.q.d-d);if(x<bd){bd=x;bi=i;}});
+            G.items[G.i]=G.extras.splice(bi,1)[0];
+            G.life.s=false;var keepL={f:G.life.f,p:G.life.p,s:false};prep();G.life=keepL;sfx('click');render();
+          }
+          function next(){
+            if(G.final){finish(G.final);return;}
+            G.i++;G.quit=false;prep();render();window.scrollTo(0,0);
+          }
+          function winnings(kind){
+            if(kind==='win')return G.prizes[G.N-1];
+            var i=G.i;
+            if(kind==='quit')return i?G.prizes[i-1]:0;
+            var w=0;G.safe.forEach(function(s){if(s<i)w=Math.max(w,G.prizes[s]);});return w;
+          }
+          function finish(kind){
+            var prize=winnings(kind),right=0,asked=0;
+            G.res.forEach(function(r){if(r){asked++;if(r==='ok')right++;}});
+            var st=A.stats;st.played++;st.best=Math.max(st.best,prize);st.right+=right;st.asked+=asked;
+            var dk=dayKey();if(st.days.indexOf(dk)<0){st.days.push(dk);if(st.days.length>90)st.days=st.days.slice(-90);}
+            Object.keys(G.dirty).forEach(function(id){saveSource(G.dirty[id]);});saveStats();
+            G.end={kind:kind,prize:prize,right:right,asked:asked};
+            go('over');
+          }
+          function viewOver(){
+            var e=G.end,h='<div class="center"><h2>'+(e.kind==='win'?'অভিনন্দন! সব প্রশ্ন জিতেছ':e.kind==='quit'?'থেমে গেলে':'ভুল উত্তর, খেলা শেষ')+'</h2>'
+             +'<div class="prize">'+money(e.prize)+'</div><p class="lead">'+bn(e.asked)+'টি প্রশ্নের মধ্যে '+bn(e.right)+'টি ঠিক'+(e.prize>A.stats.best-1&&e.prize>0&&e.prize===A.stats.best?' · নতুন সর্বোচ্চ জিত!':'')+'</p></div>';
+            h+='<div class="menu">'+hexbtn('again','আবার খেলো','নতুন প্রশ্নগুলো আগে আসবে')+hexbtn('home','ঘরে ফিরি','')+'</div>';
+            h+='<details class="rev" open><summary>পড়া ঝালাই: এই খেলার প্রশ্ন ও উত্তর</summary>';
+            G.items.forEach(function(it,i){
+              var r=G.res[i],q=it.q;
+              h+='<div class="qi">'+(r==='ok'?'✓ ':r==='bad'?'✗ ':'')+esc(q.q)+'<br><i>উত্তর: '+esc(q.o[q.a])+'</i>'+(q.e?'<div class="small">'+esc(q.e)+'</div>':'')+'</div>';
+            });
+            return h+'</details>';
+          }
+
+          /* ---------- render + events ---------- */
+          function render(){
+            var h='';
+            if(A.screen==='home')h=viewHome();else if(A.screen==='add')h=viewAdd();else if(A.screen==='bank')h=viewBank();else if(A.screen==='game')h=viewGame();else h=viewOver();
+            app.innerHTML=h;
+          }
+          var delArm=null;
+          app.addEventListener('click',function(e){
+            var el=e.target.closest('[data-act]');if(!el||el.disabled)return;
+            var act=el.getAttribute('data-act');
+            if(act==='home'){AD.stage='form';go('home');}
+            else if(act==='play'){startGame();}
+            else if(act==='add'){AD.stage='form';go('add');}
+            else if(act==='add2'){AD.stage='form';AD.log=[];render();}
+            else if(act==='bank'){go('bank');}
+            else if(act==='mute'){mute=!mute;LS.set('gs-mute',mute);render();}
+            else if(act==='savekey'){
+              var kv=(($('#adKey')||{}).value||'').trim();
+              if(kv.length<20){toast('চাবিটা ঠিক মনে হচ্ছে না। পুরোটা কপি করে দাও।');return;}
+              LS.set('gs-key',kv);setupKey();render();toast('চাবি সেভ হয়েছে।');
+            }
+            else if(act==='tab'){AD.tab=el.getAttribute('data-t');render();}
+            else if(act==='rmimg'){var i=+el.getAttribute('data-i');URL.revokeObjectURL(AD.imgs[i].url);AD.imgs.splice(i,1);render();}
+            else if(act==='gen'){runGen();}
+            else if(act==='genstop'){AD.stop=true;if(AD.ctl)AD.ctl.abort();}
+            else if(act==='playnew'){var id=AD.newId;AD.stage='form';startGame(id);}
+            else if(act==='playsrc'){startGame(el.getAttribute('data-id'));}
+            else if(act==='delsrc'){
+              var sid=el.getAttribute('data-id');
+              if(delArm===sid){delArm=null;delSource(sid);render();}
+              else{delArm=sid;el.textContent='আবার চাপলে মুছে যাবে';setTimeout(function(){if(delArm===sid){delArm=null;if(el.isConnected)el.textContent='মুছো';}},3500);}
+            }
+            else if(act==='ans'){answer(+el.getAttribute('data-j'));}
+            else if(act==='l50'){useFifty();}
+            else if(act==='lpoll'){usePoll();}
+            else if(act==='lswap'){useSwap();}
+            else if(act==='next'){next();}
+            else if(act==='quit'){
+              if(G.quit){finish('quit');}else{G.quit=true;render();setTimeout(function(){if(G&&G.quit&&A.screen==='game'){G.quit=false;render();}},3500);}
+            }
+            else if(act==='again'){startGame();}
+          });
+          app.addEventListener('input',function(e){
+            var id=e.target.id;
+            if(id==='adTitle')AD.title=e.target.value;
+            else if(id==='adText'){AD.text=e.target.value;var b=app.querySelector('[data-act="gen"]');if(b){var ok=AD.text.trim().length>80&&!!A.sample;b.disabled=!ok;b.classList.toggle('dim',!ok);}}
+            else if(id==='adFrom')AD.from=Math.max(1,Math.min(AD.pages,+e.target.value||1));
+            else if(id==='adTo')AD.to=Math.max(1,Math.min(AD.pages,+e.target.value||1));
+          });
+          app.addEventListener('change',function(e){
+            var id=e.target.id;
+            if(id==='fImg'){
+              Array.prototype.forEach.call(e.target.files,function(f){if(AD.imgs.length<20&&/^image\//.test(f.type))AD.imgs.push({file:f,url:URL.createObjectURL(f)});});
+              render();
+            }else if(id==='fPdf'&&e.target.files[0]){
+              var f=e.target.files[0];AD.pdfName=f.name;AD.pages=0;AD.pdf=null;render();
+              loadPdfJs().then(function(){return f.arrayBuffer();}).then(function(buf){return window.pdfjsLib.getDocument({data:new Uint8Array(buf)}).promise;})
+                .then(function(doc){AD.pdf=doc;AD.pages=doc.numPages;AD.from=1;AD.to=Math.min(doc.numPages,10);render();})
+                .catch(function(){AD.pdfName='';toast('পিডিএফ খোলা গেল না। পৃষ্ঠার ছবি তুলে দাও।');render();});
+            }
+          });
+
+          if(STANDALONE){window.addEventListener('popstate',function(){pushed=false;if(A.screen!=='home'){A.screen='home';render();}});}
+          /*DBG*/
+          render();
+          initSample();
+          initCloud();
+          })();
+          </script>
+          </body></html>
+          GS_EOF
+      - name: Capacitor project
+        run: |
+          npm init -y
+          npm i @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6
+          npx cap init "জ্ঞানের সিঁড়ি" com.nohan.gyanersingri --web-dir www
+          npx cap add android
+          sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.CAMERA"/>\n    <application#' android/app/src/main/AndroidManifest.xml
+          npx cap sync android
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+      - name: Rename
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk gyaner-singri.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gyaner-singri-apk
+          path: gyaner-singri.apk
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: gyaner-singri-latest
+          files: gyaner-singri.apk
